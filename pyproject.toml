@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trabalho_pratico_grafos"
+version = "0.0.1"
+authors = [
+  { name="Vicenzo Fonseca de Mello Souza", email="vicenzofms@gmail.com" },
+  { name="Renato Douglas Nascimento Silva de Oliveira", email="renatodouglasnso@gmail.com" },
+  { name="Ana Luiza de Freitas Rodrigues", email="analuizafreitas12@yahoo.com.br" },
+  { name="Kayke Emanoel de Souza Santos", email="kaykeeman@gmail.com" },
+]
+description = "A small example package"
+readme = "README.md"
+requires-python = ">=3.14"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+
+license-files = ["LICEN[CS]E*"]
+
+
+[project.urls]
+Homepage = "https://github.com/vicenzofms/Trabalho-Pratico-Grafos"
