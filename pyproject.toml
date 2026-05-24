@@ -11,19 +11,28 @@ authors = [
   { name="Ana Luiza de Freitas Rodrigues", email="analuizafreitas12@yahoo.com.br" },
   { name="Kayke Emanoel de Souza Santos", email="kaykeeman@gmail.com" },
 ]
-description = "A small example package"
-readme = "README.md"
-requires-python = ">=3.14"
 
+description = "Biblioteca de grafos para análise de repositórios - Trabalho prático"
+readme = "README.md"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
-
     "Operating System :: OS Independent",
 ]
 license = "MIT"
-
 license-files = ["LICEN[CS]E*"]
 
+[project.optional-dependencies]
+dev = [
+    "pytest >= 8.0",
+    "pytest-cov",
+]
 
 [project.urls]
 Homepage = "https://github.com/vicenzofms/Trabalho-Pratico-Grafos"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
