@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import time
 import requests
+from threading import Thread
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -37,8 +38,16 @@ class Minerador:
     def executar(self, sleepTime: float = 0.8):
         print(f" --- Começando minerador: {self.repositorio}  ---")
         interacoes = []
-        interacoes.extend(self.minerarComentariosIssues(sleepTime))
-        interacoes.extend(self.minerarFechamentoIssues(sleepTime))
+
+        thread1 = Thread(target=lambda: interacoes.extend(self.minerarComentariosIssues(sleepTime)))
+        thread2 = Thread(target=lambda: interacoes.extend(self.minerarFechamentoIssues(sleepTime)))
+
+        thread1.start()
+        thread2.start()
+
+        # esperar as threads acabarem
+        thread1.join()
+        thread2.join()
         print(f" --- Fim minerador: {self.repositorio}  ---")
         self.interacoes.extend(interacoes)
 
@@ -76,9 +85,14 @@ class Minerador:
             )
             req.raise_for_status() # se a request der ruim para a execução
             data = req.json()
-            if not data:
+            if (not data):
                 break # cheguei no final, para o loop
+
             resultado.extend(data)
+            if (len(data) < 100): # estou na última página
+                return resultado
+
+            # ainda faltam páginas
             paginaAtual += 1
             time.sleep(sleepTime) # faz ~4500 req/hora
         return resultado
