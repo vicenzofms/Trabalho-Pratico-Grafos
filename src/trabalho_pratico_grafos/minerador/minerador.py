@@ -133,20 +133,19 @@ class Minerador:
         thread1.join()
         thread2.join()
 
-        self.autoresIssues = dict()
+        autoresIssues = dict()
         for issue in issues:
-            self.autoresIssues[str(issue['number'])] = issue['user']['login']
-            print(f"Issue: {str(issue['number'])} | {issue['user']['login']}")
+            autoresIssues[str(issue['number'])] = issue['user']['login']
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
             numeroDaIssue = comentario['issue_url'].split('issues/')[1]
 
             # apenas se a issue foi registrada pela API /issues
-            if (not numeroDaIssue in self.autoresIssues):
+            if (not numeroDaIssue in autoresIssues):
                 continue
 
-            autorDaIssue = self.autoresIssues[numeroDaIssue]
+            autorDaIssue = autoresIssues[numeroDaIssue]
             # caso o comentário seja do autor (seria um loop)
             if (autorDoComentario == autorDaIssue):
                 continue
