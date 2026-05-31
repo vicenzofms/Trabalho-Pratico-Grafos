@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import time
 import requests
-from threading import Thread
+from threading import Thread, Lock
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -17,9 +17,8 @@ class Minerador:
     repositorio: str
     headers: dict
 
-    interacoes = [] # depois pode mudar pra lista ser o retornoo da função executar, mas pra debug assim ta mais fácil
-
     __mapaUsuarios: MapaUsuarios
+    __mapaInteracoes: dict[tuple[str, str, str], Interacao]
 
     PESOS = {
         # colocar mais pesos depois
@@ -34,13 +33,12 @@ class Minerador:
             "Accept": "application/vnd.github+json",
         }
         self.__mapaUsuarios = MapaUsuarios()
+        self.__mapaInteracoes = {}
 
     def executar(self, sleepTime: float = 0.8):
         print(f" --- Começando minerador: {self.repositorio}  ---")
-        interacoes = []
-
-        thread1 = Thread(target=lambda: interacoes.extend(self.minerarComentariosIssues(sleepTime)))
-        thread2 = Thread(target=lambda: interacoes.extend(self.minerarFechamentoIssues(sleepTime)))
+        thread1 = Thread(target=lambda: self.minerarComentariosIssues(sleepTime))
+        thread2 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
 
         thread1.start()
         thread2.start()
@@ -49,18 +47,26 @@ class Minerador:
         thread1.join()
         thread2.join()
         print(f" --- Fim minerador: {self.repositorio}  ---")
-        self.interacoes.extend(interacoes)
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for i in self.interacoes:
+        for i in __mapaInteracoes:
             print(i)
 
     def quantidadeInteracoes(self):
-        return len(self.interacoes)
+        return len(self.__mapaInteracoes)
 
     def quantidadeUsuarios(self):
         return self.__mapaUsuarios.quantidadeDeUsuarios()
+
+    def addInteraction(self, interacao: Interacao):
+        chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
+        existente = self.__mapaInteracoes.get(chave)
+        if existente:
+            existente["peso"] += interacao["peso"]
+            return
+        self.__mapaInteracoes[chave] = interacao
+        self.interacoes.append(interacao)
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -72,21 +78,35 @@ class Minerador:
         # minera um endpoint até o final, todas as páginas
         resultado = []
         paginaAtual = 1
+
         description = desc
         if (len(desc) <= 0):
             description = f"Fazendo request {endpoint}..."
 
-        while True:
+        nextPage = f"{self.urlBase}/{endpoint}"
+        ultimoId = None
+
+        while nextPage:
             print(f"{description} [{paginaAtual} requests]...")
             req = requests.get(
-                f"{self.urlBase}/{endpoint}",
+                nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
                 headers=self.headers
             )
+
             req.raise_for_status() # se a request der ruim para a execução
             data = req.json()
             if (not data):
                 break # cheguei no final, para o loop
+
+            idAtual = data[-1]["id"]
+
+            if idAtual == ultimoId:
+                break
+
+            ultimoId = idAtual
+
+            nextPage = req.links.get("next", {}).get("url")
 
             resultado.extend(data)
             if (len(data) < 100): # estou na última página
@@ -97,9 +117,8 @@ class Minerador:
             time.sleep(sleepTime) # faz ~4500 req/hora
         return resultado
 
-    def minerarComentariosIssues(self, sleepTime) -> list:
+    def minerarComentariosIssues(self, sleepTime) -> None:
         issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
-        interacoes = []
         for issue in issues:
             autorDaIssue = issue["user"]["login"]
 
@@ -116,18 +135,15 @@ class Minerador:
                 self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
 
                 # registra a interação
-                interacoes.append({ 
+                self.addInteraction({
                     "quemFez": autorDoComentario,
                     "alvo": autorDaIssue,
                     "peso": self.PESOS["comentario_issue"],
                     "tipo": "comentario_issue",
                 })
-            
-        return interacoes
 
-    def minerarFechamentoIssues(self, sleepTime: float):
-        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, params={ "state": "closed" })
-        interacoes = []
+    def minerarFechamentoIssues(self, sleepTime: float) -> None:
+        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando fechamento de issues...", params={ "state": "closed" })
         for issue in resultadoMineracao:
             quemFez = issue["closed_by"]["login"]
             autorDaIssue = issue["user"]["login"]
@@ -140,13 +156,12 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
             # registra a interação
-            interacoes.append({
+            self.addInteraction({
                 "quemFez": quemFez,
                 "alvo": autorDaIssue,
                 "peso": self.PESOS["fechamento_issue"],
                 "tipo": "fechamento_issue",
             })
-        return interacoes
 
     def minerarPullRequests(self, sleepTime: float):
         # TODO
