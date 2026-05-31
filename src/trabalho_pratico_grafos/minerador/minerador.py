@@ -59,13 +59,16 @@ class Minerador:
     def verUsuarios(self):
         self.__mapaUsuarios.listarUsuarios()
 
-    def minerar(self, endpoint: str, sleepTime: float, params: dict = {}) -> list[dict]:
+    def minerar(self, endpoint: str, sleepTime: float, desc: str = "", params: dict = {}) -> list[dict]:
         # minera um endpoint até o final, todas as páginas
         resultado = []
         paginaAtual = 1
-        descricao = "dos comentários" if endpoint.endswith("/issues/comments") else "dos dados"
+        description = desc
+        if (len(desc) <= 0):
+            description = f"Fazendo request {endpoint}..."
+
         while True:
-            print(f"Fazendo busca {descricao} [{paginaAtual} requests]...")
+            print(f"{description} [{paginaAtual} requests]...")
             req = requests.get(
                 f"{self.urlBase}/{endpoint}",
                 { **params, "per_page": 100, "page": paginaAtual },
@@ -81,7 +84,7 @@ class Minerador:
         return resultado
 
     def minerarComentariosIssues(self, sleepTime) -> list:
-        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, params={ "state": "all" })
+        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
         interacoes = []
         for issue in issues:
             autorDaIssue = issue["user"]["login"]
@@ -89,7 +92,7 @@ class Minerador:
             # registra o autor
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
-            comentarios = self.minerar(f"repos/{self.repositorio}/issues/{issue['number']}/comments", sleepTime)
+            comentarios = self.minerar(f"repos/{self.repositorio}/issues/{issue['number']}/comments", sleepTime, desc=f"Buscando comentários da issue {issue['number']}")
 
             for comentario in comentarios:
                 autorDoComentario = comentario["user"]["login"]
@@ -109,7 +112,7 @@ class Minerador:
         return interacoes
 
     def minerarFechamentoIssues(self, sleepTime: float):
-        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, { "state": "closed" })
+        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, params={ "state": "closed" })
         interacoes = []
         for issue in resultadoMineracao:
             quemFez = issue["closed_by"]["login"]
