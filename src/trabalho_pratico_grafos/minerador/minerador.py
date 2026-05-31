@@ -33,10 +33,10 @@ class Minerador:
         }
         self.__mapaUsuarios = MapaUsuarios()
 
-    def executar(self):
+    def executar(self, sleepTime: float = 0.8):
         print(f" --- Começando minerador: {self.repositorio}  ---")
         interacoes = []
-        interacoes.extend(self.minerarComentariosIssues())
+        interacoes.extend(self.minerarComentariosIssues(sleepTime))
         print(f" --- Fim minerador: {self.repositorio}  ---")
         self.interacoes.extend(interacoes) 
 
@@ -51,7 +51,7 @@ class Minerador:
     def verUsuarios(self):
         self.__mapaUsuarios.listarUsuarios()
 
-    def minerar(self, endpoint: str, params: dict = {}) -> list[dict]:
+    def minerar(self, endpoint: str, sleepTime: float, params: dict = {}) -> list[dict]:
         # minera um endpoint até o final, todas as páginas
         resultado = []
         paginaAtual = 1
@@ -68,11 +68,11 @@ class Minerador:
                 break # cheguei no final, para o loop
             resultado.extend(data)
             paginaAtual += 1
-            time.sleep(0.8) # faz ~4500 req/hora
+            time.sleep(sleepTime) # faz ~4500 req/hora
         return resultado
 
-    def minerarComentariosIssues(self) -> list:
-        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues/comments")
+    def minerarComentariosIssues(self, sleepTime) -> list:
+        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime)
         interacoes = []
         for comentario in resultadoMineracao:
             quemFez = comentario["user"]["login"]
@@ -92,10 +92,10 @@ class Minerador:
         return interacoes
 
 
-    def minerarFechamentoIssues(self):
+    def minerarFechamentoIssues(self, sleepTime: float):
         # TODO
         pass
 
-    def minerarPullRequests(self):
+    def minerarPullRequests(self, sleepTime: float):
         # TODO
         pass
