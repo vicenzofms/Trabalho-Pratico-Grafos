@@ -20,6 +20,8 @@ class Minerador:
     __mapaUsuarios: MapaUsuarios
     __mapaInteracoes: dict[tuple[str, str, str], Interacao]
 
+    __contadorRequests: int = 0;
+
     PESOS = {
         # colocar mais pesos depois
         "comentario_issue": 2,
@@ -86,7 +88,8 @@ class Minerador:
         ultimoId = None
 
         while nextPage:
-            print(f"{description} [{paginaAtual} requests]...")
+            self.__contadorRequests += 1;
+            print(f"{description} [{self.__contadorRequests} requests]...")
             req = requests.get(
                 nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
