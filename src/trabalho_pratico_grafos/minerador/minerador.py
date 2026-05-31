@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import time
 import requests
-from threading import Thread, Lock
+from threading import Thread
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -119,20 +119,21 @@ class Minerador:
 
     def minerarComentariosIssues(self, sleepTime) -> None:
         issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
+        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
+
+        autoresIssues = dict()
         for issue in issues:
-            autorDaIssue = issue["user"]["login"]
+            autoresIssues[str(issue['number'])] = issue['user']['login']
 
-            # registra o autor
+        for comentario in comentarios:
+            autorDoComentario = comentario["user"]["login"]
+            autorDaIssue = autoresIssues[comentario['issue_url'].split('issues/')[1]]
+            if (autorDoComentario == autorDaIssue):
+                continue
+
+            # registra os envolvidos
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
-
-            comentarios = self.minerar(f"repos/{self.repositorio}/issues/{issue['number']}/comments", sleepTime, desc=f"Buscando comentários da issue {issue['number']}")
-
-            for comentario in comentarios:
-                autorDoComentario = comentario["user"]["login"]
-                if (autorDoComentario == autorDaIssue):
-                    continue
-                # registra o autor
-                self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
 
                 # registra a interação
                 self.addInteraction({
