@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import time
 import requests
-from threading import Thread
+from threading import Thread, Lock
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -19,6 +19,7 @@ class Minerador:
 
     __mapaUsuarios: MapaUsuarios
     __mapaInteracoes: dict[tuple[str, str, str], Interacao]
+    __interacoesLock: Lock
 
     PESOS = {
         # colocar mais pesos depois
@@ -35,16 +36,18 @@ class Minerador:
         }
         self.__mapaUsuarios = MapaUsuarios()
         self.__mapaInteracoes = {}
+        self.__interacoesLock = Lock()
 
     def executar(self, sleepTime: float = 0.8):
+        inicio = time.time()
         print(f" --- Começando minerador: {self.repositorio}  ---")
         thread1 = Thread(target=lambda: self.minerarComentariosIssues(sleepTime))
         thread2 = Thread(target=lambda: self.minerarComentariosPullRequest(sleepTime))
         thread3 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
 
-        #thread1.start()
+        thread1.start()
         thread2.start()
-        #thread3.start()
+        thread3.start()
 
         # esperar as threads acabarem
         thread1.join()
@@ -52,11 +55,13 @@ class Minerador:
         thread3.join()
 
         print(f" --- Fim minerador: {self.repositorio}  ---")
+        tempoTotal = time.time() - inicio
+        print(f" --- Fim minerador: {self.repositorio} ({tempoTotal:.2f}s) ---")
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for i in self.__mapaInteracoes:
-            print(i)
+        for key, value in self.__mapaInteracoes.items():
+            print(f"{key}: {value}")
 
     def quantidadeInteracoes(self):
         return len(self.__mapaInteracoes)
@@ -65,12 +70,13 @@ class Minerador:
         return self.__mapaUsuarios.quantidadeDeUsuarios()
 
     def addInteraction(self, interacao: Interacao):
-        chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
-        existente = self.__mapaInteracoes.get(chave)
-        if existente:
-            existente["peso"] += interacao["peso"]
-            return
-        self.__mapaInteracoes[chave] = interacao
+        with self.__interacoesLock:
+            chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
+            existente = self.__mapaInteracoes.get(chave)
+            if existente:
+                existente["peso"] += interacao["peso"]
+                return
+            self.__mapaInteracoes[chave] = interacao
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
