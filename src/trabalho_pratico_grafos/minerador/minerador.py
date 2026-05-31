@@ -72,23 +72,31 @@ class Minerador:
         return resultado
 
     def minerarComentariosIssues(self, sleepTime) -> list:
-        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime)
+        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, params={ "state": "all" })
         interacoes = []
-        for comentario in resultadoMineracao:
-            quemFez = comentario["user"]["login"]
-            autorDaIssue = self.repositorio.split("/")[0]
+        for issue in issues:
+            autorDaIssue = issue["user"]["login"]
 
-            # registra os dois usuarios
-            self.__mapaUsuarios.buscarOuRegistrar(quemFez)
+            # registra o autor
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
-            # registra a interação
-            interacoes.append({ 
-                "quemFez": quemFez,
-                "alvo": autorDaIssue,
-                "peso": self.PESOS["comentario_issue"],
-                "tipo": "comentario_issue",
-            })
+            comentarios = self.minerar(f"repos/{self.repositorio}/issues/{issue['number']}/comments", sleepTime)
+
+            for comentario in comentarios:
+                autorDoComentario = comentario["user"]["login"]
+                if (autorDoComentario == autorDaIssue):
+                    continue
+                # registra o autor
+                self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
+
+                # registra a interação
+                interacoes.append({ 
+                    "quemFez": autorDoComentario,
+                    "alvo": autorDaIssue,
+                    "peso": self.PESOS["comentario_issue"],
+                    "tipo": "comentario_issue",
+                })
+            
         return interacoes
 
 
