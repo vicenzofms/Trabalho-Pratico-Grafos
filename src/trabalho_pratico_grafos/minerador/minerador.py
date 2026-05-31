@@ -23,6 +23,7 @@ class Minerador:
     PESOS = {
         # colocar mais pesos depois
         "comentario_issue": 2,
+        "comentario_pull_request": 2,
         "fechamento_issue": 1
     }
 
@@ -117,7 +118,7 @@ class Minerador:
         return resultado
 
     def minerarComentariosIssues(self, sleepTime) -> None:
-        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
+        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...", params={ "state": "all" })
         comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
 
         autoresIssues = dict()
@@ -140,6 +141,32 @@ class Minerador:
                 "alvo": autorDaIssue,
                 "peso": self.PESOS["comentario_issue"],
                 "tipo": "comentario_issue",
+            })
+
+    def minerarComentariosPullRequest(self, sleepTime) -> None:
+        pulls = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...", params={ "state": "all" })
+        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests...")
+
+        autoresPullRequests = dict()
+        for pull in pulls:
+            autoresPullRequests[str(pull['number'])] = pull['user']['login']
+
+        for comentario in comentarios:
+            autorDoComentario = comentario["user"]["login"]
+            autorDoPullRequest = autoresPullRequests[comentario['pull_request_url'].split('pulls/')[1]]
+            if autorDoComentario == autorDoPullRequest:
+                continue
+
+            # registra os envolvidos
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
+
+            # registra a interação
+            self.addInteraction({
+                "quemFez": autorDoComentario,
+                "alvo": autorDoPullRequest,
+                "peso": self.PESOS["comentario_pull_request"],
+                "tipo": "comentario_pull_request",
             })
 
     def minerarFechamentoIssues(self, sleepTime: float) -> None:
