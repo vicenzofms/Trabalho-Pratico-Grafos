@@ -50,8 +50,8 @@ class Minerador:
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for i in self.__mapaInteracoes:
-            print(i)
+        for key, value in self.__mapaInteracoes.items():
+            print(f"{key}: {value}")
 
     def quantidadeInteracoes(self):
         return len(self.__mapaInteracoes)
