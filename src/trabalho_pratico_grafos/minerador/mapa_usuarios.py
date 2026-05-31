@@ -7,7 +7,8 @@ class MapaUsuarios:
         self.__usuarios: dict[str, int] = {} # guarda keyvalue pairs "nome do usuario": id
         self.__ids: list[str] = [] # mapeia os ids pra um usuario
 
-    def buscarOuRegistrar(self, username: str) -> int: # Caso usuário não esteja registrado, registra e retorna o id
+    def buscarOuRegistrar(self, username: str) -> int:
+        # Caso usuário não esteja registrado, registra e retorna o id
         # podemos fazer a adição apenas alocando o próximo id por que não teremos remoção do usuário
         # dessa forma não tem problema ser incremental
         if username not in self.__usuarios: # usuário ainda não tá na lista

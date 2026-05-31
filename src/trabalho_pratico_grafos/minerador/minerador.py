@@ -22,7 +22,8 @@ class Minerador:
 
     PESOS = {
         # colocar mais pesos depois
-        "comentario_issue": 2
+        "comentario_issue": 2,
+        "fechamento_issue": 1
     }
 
     def __init__(self, repositorio: str, token: str) -> None:
@@ -37,13 +38,20 @@ class Minerador:
         print(f" --- Começando minerador: {self.repositorio}  ---")
         interacoes = []
         interacoes.extend(self.minerarComentariosIssues(sleepTime))
+        interacoes.extend(self.minerarFechamentoIssues(sleepTime))
         print(f" --- Fim minerador: {self.repositorio}  ---")
-        self.interacoes.extend(interacoes) 
+        self.interacoes.extend(interacoes)
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
         for i in self.interacoes:
             print(i)
+
+    def quantidadeInteracoes(self):
+        return len(self.interacoes)
+
+    def quantidadeUsuarios(self):
+        return self.__mapaUsuarios.quantidadeDeUsuarios()
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -55,8 +63,9 @@ class Minerador:
         # minera um endpoint até o final, todas as páginas
         resultado = []
         paginaAtual = 1
+        descricao = "dos comentários" if endpoint.endswith("/issues/comments") else "dos dados"
         while True:
-            print(f"Fazendo request: {self.urlBase}/{endpoint}")
+            print(f"Fazendo busca {descricao} [{paginaAtual} requests]...")
             req = requests.get(
                 f"{self.urlBase}/{endpoint}",
                 { **params, "per_page": 100, "page": paginaAtual },
@@ -99,10 +108,28 @@ class Minerador:
             
         return interacoes
 
-
     def minerarFechamentoIssues(self, sleepTime: float):
-        # TODO
-        pass
+        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, { "state": "closed" })
+        interacoes = []
+        for issue in resultadoMineracao:
+            quemFez = issue["closed_by"]["login"]
+            autorDaIssue = issue["user"]["login"]
+
+            if (quemFez == autorDaIssue):
+                continue;
+
+            # registra os dois usuarios
+            self.__mapaUsuarios.buscarOuRegistrar(quemFez)
+            self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
+
+            # registra a interação
+            interacoes.append({
+                "quemFez": quemFez,
+                "alvo": autorDaIssue,
+                "peso": self.PESOS["fechamento_issue"],
+                "tipo": "fechamento_issue",
+            })
+        return interacoes
 
     def minerarPullRequests(self, sleepTime: float):
         # TODO
