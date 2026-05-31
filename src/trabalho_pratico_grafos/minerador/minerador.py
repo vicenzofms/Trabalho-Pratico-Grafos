@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import time
 import requests
-from threading import Thread
+from threading import Thread, Lock
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -19,12 +19,14 @@ class Minerador:
 
     __mapaUsuarios: MapaUsuarios
     __mapaInteracoes: dict[tuple[str, str, str], Interacao]
+    __interacoesLock: Lock
 
     __contadorRequests: int = 0;
 
     PESOS = {
         # colocar mais pesos depois
         "comentario_issue": 2,
+        "comentario_pull_request": 2,
         "fechamento_issue": 1
     }
 
@@ -36,19 +38,27 @@ class Minerador:
         }
         self.__mapaUsuarios = MapaUsuarios()
         self.__mapaInteracoes = {}
+        self.__interacoesLock = Lock()
 
     def executar(self, sleepTime: float = 0.8):
+        inicio = time.time()
         print(f" --- Começando minerador: {self.repositorio}  ---")
         thread1 = Thread(target=lambda: self.minerarComentariosIssues(sleepTime))
-        thread2 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
+        thread2 = Thread(target=lambda: self.minerarComentariosPullRequest(sleepTime))
+        thread3 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
 
         thread1.start()
         thread2.start()
+        thread3.start()
 
         # esperar as threads acabarem
         thread1.join()
         thread2.join()
+        thread3.join()
+
         print(f" --- Fim minerador: {self.repositorio}  ---")
+        tempoTotal = time.time() - inicio
+        print(f" --- Fim minerador: {self.repositorio} ({tempoTotal:.2f}s) ---")
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
@@ -62,12 +72,13 @@ class Minerador:
         return self.__mapaUsuarios.quantidadeDeUsuarios()
 
     def addInteraction(self, interacao: Interacao):
-        chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
-        existente = self.__mapaInteracoes.get(chave)
-        if existente:
-            existente["peso"] += interacao["peso"]
-            return
-        self.__mapaInteracoes[chave] = interacao
+        with self.__interacoesLock:
+            chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
+            existente = self.__mapaInteracoes.get(chave)
+            if existente:
+                existente["peso"] += interacao["peso"]
+                return
+            self.__mapaInteracoes[chave] = interacao
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -163,6 +174,46 @@ class Minerador:
                 "alvo": autorDaIssue,
                 "peso": self.PESOS["comentario_issue"],
                 "tipo": "comentario_issue",
+            })
+
+    def minerarComentariosPullRequest(self, sleepTime) -> None:
+        pulls = []
+        comentarios = []
+
+        thread1 = Thread(
+            target=lambda: pulls.extend(self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...", params={ "state": "all" }))
+        )
+
+        thread2 = Thread(
+            target=lambda: comentarios.extend(self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests..."))
+        )
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
+
+        autoresPullRequests = dict()
+        for pull in pulls:
+            autoresPullRequests[str(pull['number'])] = pull['user']['login']
+
+        for comentario in comentarios:
+            autorDoComentario = comentario["user"]["login"]
+            autorDoPullRequest = autoresPullRequests[comentario['pull_request_url'].split('pulls/')[1]]
+            if autorDoComentario == autorDoPullRequest:
+                continue
+
+            # registra os envolvidos
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
+
+            # registra a interação
+            self.addInteraction({
+                "quemFez": autorDoComentario,
+                "alvo": autorDoPullRequest,
+                "peso": self.PESOS["comentario_pull_request"],
+                "tipo": "comentario_pull_request",
             })
 
     def minerarFechamentoIssues(self, sleepTime: float) -> None:
