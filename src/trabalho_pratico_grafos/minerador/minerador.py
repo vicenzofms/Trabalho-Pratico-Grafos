@@ -39,14 +39,18 @@ class Minerador:
     def executar(self, sleepTime: float = 0.8):
         print(f" --- Começando minerador: {self.repositorio}  ---")
         thread1 = Thread(target=lambda: self.minerarComentariosIssues(sleepTime))
-        thread2 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
+        thread2 = Thread(target=lambda: self.minerarComentariosPullRequest(sleepTime))
+        thread3 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
 
-        thread1.start()
+        #thread1.start()
         thread2.start()
+        #thread3.start()
 
         # esperar as threads acabarem
         thread1.join()
         thread2.join()
+        thread3.join()
+
         print(f" --- Fim minerador: {self.repositorio}  ---")
 
     # Só lista as interações, mais usado pra debug
@@ -118,8 +122,21 @@ class Minerador:
         return resultado
 
     def minerarComentariosIssues(self, sleepTime) -> None:
-        issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...", params={ "state": "all" })
-        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
+        issues = []
+        comentarios = []
+
+        thread1 = Thread(
+            target=lambda: issues.extend(self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" }))
+        )
+        thread2 = Thread(
+            target=lambda: comentarios.extend(self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues..."))
+        )
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
 
         autoresIssues = dict()
         for issue in issues:
@@ -127,7 +144,14 @@ class Minerador:
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
-            autorDaIssue = autoresIssues[comentario['issue_url'].split('issues/')[1]]
+            numeroDaIssue = comentario['issue_url'].split('issues/')[1]
+
+            # apenas se a issue foi registrada pela API /issues
+            if (not numeroDaIssue in autoresIssues):
+                continue
+
+            autorDaIssue = autoresIssues[numeroDaIssue]
+            # caso o comentário seja do autor (seria um loop)
             if (autorDoComentario == autorDaIssue):
                 continue
 
@@ -144,8 +168,22 @@ class Minerador:
             })
 
     def minerarComentariosPullRequest(self, sleepTime) -> None:
-        pulls = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...", params={ "state": "all" })
-        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests...")
+        pulls = []
+        comentarios = []
+
+        thread1 = Thread(
+            target=lambda: pulls.extend(self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...", params={ "state": "all" }))
+        )
+
+        thread2 = Thread(
+            target=lambda: comentarios.extend(self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests..."))
+        )
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
 
         autoresPullRequests = dict()
         for pull in pulls:
