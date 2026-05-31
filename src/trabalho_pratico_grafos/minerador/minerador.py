@@ -50,7 +50,7 @@ class Minerador:
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for i in __mapaInteracoes:
+        for i in self.__mapaInteracoes:
             print(i)
 
     def quantidadeInteracoes(self):
@@ -66,7 +66,6 @@ class Minerador:
             existente["peso"] += interacao["peso"]
             return
         self.__mapaInteracoes[chave] = interacao
-        self.interacoes.append(interacao)
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -135,17 +134,20 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
-                # registra a interação
-                self.addInteraction({
-                    "quemFez": autorDoComentario,
-                    "alvo": autorDaIssue,
-                    "peso": self.PESOS["comentario_issue"],
-                    "tipo": "comentario_issue",
-                })
+            # registra a interação
+            self.addInteraction({
+                "quemFez": autorDoComentario,
+                "alvo": autorDaIssue,
+                "peso": self.PESOS["comentario_issue"],
+                "tipo": "comentario_issue",
+            })
 
     def minerarFechamentoIssues(self, sleepTime: float) -> None:
         resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando fechamento de issues...", params={ "state": "closed" })
         for issue in resultadoMineracao:
+            if not issue["closed_by"]:
+                continue;
+
             quemFez = issue["closed_by"]["login"]
             autorDaIssue = issue["user"]["login"]
 
