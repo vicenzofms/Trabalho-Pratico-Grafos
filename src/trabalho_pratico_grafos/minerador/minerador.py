@@ -66,14 +66,20 @@ class Minerador:
         thread3 = Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime))
         thread4 = Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime))
         thread5 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
+        thread6 = Thread(target=lambda: self.minerarRevisoesPullRequests(sleepTime))
+        thread7 = Thread(target=lambda: self.minerarMergePullRequests(sleepTime))
 
         thread3.start()
         thread4.start()
         thread5.start()
+        thread6.start()
+        thread7.start()
 
         thread3.join()
         thread4.join()
         thread5.join()
+        thread6.join()
+        thread7.join()
 
         print(f" --- Fim minerador: {self.repositorio}  ---")
         tempoTotal = time.time() - inicio
@@ -221,10 +227,8 @@ class Minerador:
             self.addInteraction(i)
 
 
-    def minerarRevisoesPullRequests(self, sleepTime: float) -> list:
-        pullRequests = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...",params={ "state": "all" })
-
-        for pull in pullRequests:
+    def minerarRevisoesPullRequests(self, sleepTime: float) -> None:
+        for pull in self.__pullRequests:
             statusDoPull = pull["state"]
             autorDoPull = pull["user"]["login"]
             autorDoRepositorio = self.repositorio.split("/")[0]
@@ -244,18 +248,12 @@ class Minerador:
                 self.__mapaUsuarios.buscarOuRegistrar(autorDaRevisao)
                 # registra a interação
 
-                self.addInteraction({
-                    "quemFez": autorDaRevisao,
-                    "alvo": autorDoPull,
-                    "peso": self.PESOS["revisao_pull"],
-                    "tipo": "revisao_pull",
-                })
+                i = Interacao(autorDaRevisao, autorDoPull, self.PESOS["revisao_pull"], "revisao_pull")
+                self.addInteraction(i)
 
 
     def minerarMergePullRequests(self, sleepTime: float) -> None:
-        pullRequests = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...",params={ "state": "all" })
-        interacoes = []
-        for pull in pullRequests:
+        for pull in self.__pullRequests:
             if not pull.get("merged_at"):
                 continue
             autorDoPull = pull["user"]["login"]
@@ -267,11 +265,7 @@ class Minerador:
 
             self.__mapaUsuarios.buscarOuRegistrar(autorDoPull)
 
-            self.addInteraction({
-                "quemFez": mergeAutor,
-                "alvo": autorDoPull,
-                "peso": self.PESOS["merge_pull"],
-                "tipo": "merge_pull",
-            })
+            i = Interacao(mergeAutor, autorDoPull, self.PESOS["merge_pull"], "merge_pull")
+            self.addInteraction(i)
 
 
