@@ -21,7 +21,12 @@ class Minerador:
     __mapaInteracoes: dict[tuple[str, str, str], Interacao]
     __interacoesLock: Lock
 
-    __contadorRequests: int = 0;
+    __contadorRequests: int = 0
+
+    __autoresIssuesPRs: dict[str, str]
+    
+    __pullRequests: list[dict]
+    __issues: list[dict]
 
     PESOS = {
         # colocar mais pesos depois
@@ -43,18 +48,30 @@ class Minerador:
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
         print(f" --- Começando minerador: {self.repositorio}  ---")
-        thread1 = Thread(target=lambda: self.minerarComentariosIssues(sleepTime))
-        thread2 = Thread(target=lambda: self.minerarComentariosPullRequest(sleepTime))
-        thread3 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
+        # informações básicas
+        thread1 = Thread(target=lambda: self.buscarIssues(sleepTime))
+        thread2 = Thread(target=lambda: self.buscarPullRequests(sleepTime))
 
         thread1.start()
         thread2.start()
-        thread3.start()
 
-        # esperar as threads acabarem
         thread1.join()
         thread2.join()
+
+        self.definirAutoresIssuesPRs()
+
+        # informações específicas
+        thread3 = Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime))
+        thread4 = Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime))
+        thread5 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
+
+        thread3.start()
+        thread4.start()
+        thread5.start()
+
         thread3.join()
+        thread4.join()
+        thread5.join()
 
         print(f" --- Fim minerador: {self.repositorio}  ---")
         tempoTotal = time.time() - inicio
@@ -73,10 +90,10 @@ class Minerador:
 
     def addInteraction(self, interacao: Interacao):
         with self.__interacoesLock:
-            chave = (interacao["quemFez"], interacao["alvo"], interacao["tipo"])
+            chave = (interacao.quemFez, interacao.alvo, interacao.tipo)
             existente = self.__mapaInteracoes.get(chave)
             if existente:
-                existente["peso"] += interacao["peso"]
+                existente.peso += interacao.peso
                 return
             self.__mapaInteracoes[chave] = interacao
 
@@ -130,36 +147,28 @@ class Minerador:
             time.sleep(sleepTime) # faz ~4500 req/hora
         return resultado
 
-    def minerarComentariosIssues(self, sleepTime) -> None:
-        issues = []
-        comentarios = []
+    def buscarPullRequests(self, sleepTime: float) -> None:
+        self.__pullRequests = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando PRs do repositório...",params={ "state": "all" })
 
-        thread1 = Thread(
-            target=lambda: issues.extend(self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" }))
-        )
-        thread2 = Thread(
-            target=lambda: comentarios.extend(self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues..."))
-        )
+    def buscarIssues(self, sleepTime: float) -> None:
+        self.__issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
 
-        thread1.start()
-        thread2.start()
+    def definirAutoresIssuesPRs(self) -> None:
+        self.__autoresIssuesPRs = dict()
+        for issue in self.__issues:
+            self.__autoresIssuesPRs[str(issue['number'])] = issue['user']['login']
+            
+        for pr in self.__pullRequests:
+            self.__autoresIssuesPRs[str(pr['number'])] = pr['user']['login']
 
-        thread1.join()
-        thread2.join()
-
-        autoresIssues = dict()
-        for issue in issues:
-            autoresIssues[str(issue['number'])] = issue['user']['login']
-
+    def minerarComentariosIssuesPR(self, sleepTime) -> None:
+        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
+        
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
             numeroDaIssue = comentario['issue_url'].split('issues/')[1]
 
-            # apenas se a issue foi registrada pela API /issues
-            if (not numeroDaIssue in autoresIssues):
-                continue
-
-            autorDaIssue = autoresIssues[numeroDaIssue]
+            autorDaIssue = self.__autoresIssuesPRs[numeroDaIssue]
             # caso o comentário seja do autor (seria um loop)
             if (autorDoComentario == autorDaIssue):
                 continue
@@ -169,38 +178,16 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
             # registra a interação
-            self.addInteraction({
-                "quemFez": autorDoComentario,
-                "alvo": autorDaIssue,
-                "peso": self.PESOS["comentario_issue"],
-                "tipo": "comentario_issue",
-            })
+            i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentarios_issue")
+            self.addInteraction(i)
 
-    def minerarComentariosPullRequest(self, sleepTime) -> None:
-        pulls = []
-        comentarios = []
-
-        thread1 = Thread(
-            target=lambda: pulls.extend(self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando pull requests do repositório...", params={ "state": "all" }))
-        )
-
-        thread2 = Thread(
-            target=lambda: comentarios.extend(self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests..."))
-        )
-
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
-
-        autoresPullRequests = dict()
-        for pull in pulls:
-            autoresPullRequests[str(pull['number'])] = pull['user']['login']
+    def minerarComentariosInlinePullRequest(self, sleepTime) -> None:
+        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests...")
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
-            autorDoPullRequest = autoresPullRequests[comentario['pull_request_url'].split('pulls/')[1]]
+            autorDoPullRequest = self.__autoresIssuesPRs[comentario['pull_request_url'].split('pulls/')[1]]
+
             if autorDoComentario == autorDoPullRequest:
                 continue
 
@@ -209,16 +196,11 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
 
             # registra a interação
-            self.addInteraction({
-                "quemFez": autorDoComentario,
-                "alvo": autorDoPullRequest,
-                "peso": self.PESOS["comentario_pull_request"],
-                "tipo": "comentario_pull_request",
-            })
+            i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentarios_pull_request")
+            self.addInteraction(i)
 
     def minerarFechamentoIssues(self, sleepTime: float) -> None:
-        resultadoMineracao = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando fechamento de issues...", params={ "state": "closed" })
-        for issue in resultadoMineracao:
+        for issue in self.__issues:
             if not issue["closed_by"]:
                 continue;
 
@@ -233,12 +215,8 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
             # registra a interação
-            self.addInteraction({
-                "quemFez": quemFez,
-                "alvo": autorDaIssue,
-                "peso": self.PESOS["fechamento_issue"],
-                "tipo": "fechamento_issue",
-            })
+            i = Interacao(quemFez, autorDaIssue, self.PESOS["fechamento_issue"], "fechamento_issue")
+            self.addInteraction(i)
 
     def minerarPullRequests(self, sleepTime: float):
         # TODO
