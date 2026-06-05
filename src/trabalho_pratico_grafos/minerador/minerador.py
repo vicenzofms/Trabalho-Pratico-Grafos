@@ -18,13 +18,14 @@ class Minerador:
     headers: dict
 
     __mapaUsuarios: MapaUsuarios
-    __mapaInteracoes: dict[tuple[str, str, str], Interacao]
+    mapaInteracoes: dict[tuple[str, str, str], Interacao]
     __interacoesLock: Lock
 
     __contadorRequests: int = 0
+    contadorGeralInteracoes: int = 0
 
     __autoresIssuesPRs: dict[str, str]
-    
+
     __pullRequests: list[dict]
     __issues: list[dict]
 
@@ -44,8 +45,13 @@ class Minerador:
             "Accept": "application/vnd.github+json",
         }
         self.__mapaUsuarios = MapaUsuarios()
-        self.__mapaInteracoes = {}
+        self.mapaInteracoes = {}
         self.__interacoesLock = Lock()
+        self.__requestsContadorLock = Lock()
+
+    def aumentarContadorRequest(self):
+        with self.__requestsContadorLock:
+            self.__contadorRequests += 1
 
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
@@ -66,8 +72,8 @@ class Minerador:
         thread3 = Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime))
         thread4 = Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime))
         thread5 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
-        thread6 = Thread(target=lambda: self.minerarRevisoesPullRequests(sleepTime))
-        thread7 = Thread(target=lambda: self.minerarMergePullRequests(sleepTime))
+        thread6 = Thread(target=self.minerarRevisoesPullRequests)
+        thread7 = Thread(target=self.minerarMergePullRequests)
 
         thread3.start()
         thread4.start()
@@ -81,29 +87,30 @@ class Minerador:
         thread6.join()
         thread7.join()
 
-        print(f" --- Fim minerador: {self.repositorio}  ---")
         tempoTotal = time.time() - inicio
         print(f" --- Fim minerador: {self.repositorio} ({tempoTotal:.2f}s) ---")
+        print(f" --- Total de requests: {self.__contadorRequests} ---")
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for key, value in self.__mapaInteracoes.items():
+        for key, value in self.mapaInteracoes.items():
             print(f"{key}: {value}")
 
     def quantidadeInteracoes(self):
-        return len(self.__mapaInteracoes)
+        return len(self.mapaInteracoes)
 
     def quantidadeUsuarios(self):
         return self.__mapaUsuarios.quantidadeDeUsuarios()
 
     def addInteraction(self, interacao: Interacao):
         with self.__interacoesLock:
+            self.contadorGeralInteracoes += 1
             chave = (interacao.quemFez, interacao.alvo, interacao.tipo)
-            existente = self.__mapaInteracoes.get(chave)
+            existente = self.mapaInteracoes.get(chave)
             if existente:
                 existente.peso += interacao.peso
                 return
-            self.__mapaInteracoes[chave] = interacao
+            self.mapaInteracoes[chave] = interacao
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -124,8 +131,8 @@ class Minerador:
         ultimoId = None
 
         while nextPage:
-            self.__contadorRequests += 1;
-            print(f"{description} [{self.__contadorRequests} requests]...")
+            self.aumentarContadorRequest()
+            print(f"{description}...")
             req = requests.get(
                 nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
@@ -165,16 +172,20 @@ class Minerador:
         self.__autoresIssuesPRs = dict()
         for issue in self.__issues:
             self.__autoresIssuesPRs[str(issue['number'])] = issue['user']['login']
-            
+
         for pr in self.__pullRequests:
             self.__autoresIssuesPRs[str(pr['number'])] = pr['user']['login']
 
     def minerarComentariosIssuesPR(self, sleepTime) -> None:
         comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
-        
+
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
             numeroDaIssue = comentario['issue_url'].split('issues/')[1]
+
+            # Comentário em issue fantasma
+            if not numeroDaIssue in self.__autoresIssuesPRs:
+                continue
 
             autorDaIssue = self.__autoresIssuesPRs[numeroDaIssue]
             # caso o comentário seja do autor (seria um loop)
@@ -186,7 +197,7 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
             # registra a interação
-            i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentarios_issue")
+            i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentario_issue")
             self.addInteraction(i)
 
     def minerarComentariosInlinePullRequest(self, sleepTime) -> None:
@@ -194,8 +205,14 @@ class Minerador:
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
+
+            # Comentário em PR fantasma
+            if not comentario["pull_request_url"].split("pulls/")[1] in self.__autoresIssuesPRs:
+                continue
+
             autorDoPullRequest = self.__autoresIssuesPRs[comentario['pull_request_url'].split('pulls/')[1]]
 
+            # caso o comentário seja do autor (seria um loop)
             if autorDoComentario == autorDoPullRequest:
                 continue
 
@@ -204,12 +221,12 @@ class Minerador:
             self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
 
             # registra a interação
-            i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentarios_pull_request")
+            i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentario_pull_request")
             self.addInteraction(i)
 
     def minerarFechamentoIssues(self, sleepTime: float) -> None:
         for issue in self.__issues:
-            if not issue["closed_by"]:
+            if not issue["closed_by"] or issue.get("pull_request"):
                 continue;
 
             quemFez = issue["closed_by"]["login"]
@@ -227,45 +244,84 @@ class Minerador:
             self.addInteraction(i)
 
 
-    def minerarRevisoesPullRequests(self, sleepTime: float) -> None:
-        for pull in self.__pullRequests:
-            statusDoPull = pull["state"]
-            autorDoPull = pull["user"]["login"]
-            autorDoRepositorio = self.repositorio.split("/")[0]
-            # registra os dois usuarios
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoPull)
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoRepositorio)
-            revisoes = self.minerar(f"repos/{self.repositorio}/pulls/{pull['number']}/reviews", sleepTime, desc=f"Buscando revisões do pull {pull['number']}")
+    def minerarRevisoesPullRequests(self) -> None:
+        # dividir o array de prs em 4 subarrays
+        qntd = len(self.__pullRequests)
+        qntdPorGrupo, sobra = divmod(qntd, 4)
+        chunks = []
+        inicio = 0
+        for i in range(4):
+            fim = inicio + qntdPorGrupo + (1 if i < sobra else 0) # ternário para que caso seja um grupo que tem a mais adicionar 1 item
+            chunks.append([ {"num": pr['number'], "autorDoPull": pr['user']['login']} for pr in self.__pullRequests[inicio:fim] ])
+            inicio = fim
 
-            for revisao in revisoes:
-                if not revisao.get("user"):  # pula revisões sem usuário
-                    continue
-                autorDaRevisao = revisao["user"]["login"]
-                statusRevisao = revisao["state"]
-                if (autorDaRevisao == autorDoRepositorio):
-                    continue
-                # registra o autor
-                self.__mapaUsuarios.buscarOuRegistrar(autorDaRevisao)
-                # registra a interação
+        # cria as threads
+        threads = []
+        for chunk in chunks:
+            thread = Thread(target=self.processarMergeOrReviewChunk, args=("review", chunk,)) # precisa da , no final para tratar como tupla
+            thread.start()
+            threads.append(thread)
 
-                i = Interacao(autorDaRevisao, autorDoPull, self.PESOS["revisao_pull"], "revisao_pull")
-                self.addInteraction(i)
+        # espera as 4 threads acabarem
+        for thread in threads:
+            thread.join()
 
-
-    def minerarMergePullRequests(self, sleepTime: float) -> None:
+    def minerarMergePullRequests(self) -> None:
+        merges = []
         for pull in self.__pullRequests:
             if not pull.get("merged_at"):
                 continue
             autorDoPull = pull["user"]["login"]
-            number = pull["number"]
+            self.__mapaUsuarios.buscarOuRegistrar(autorDoPull)
+            merges.append({"autorDoPull": autorDoPull, "num": pull["number"]})
 
-            mergeAutor = pull["merged_at"]
-            if mergeAutor == autorDoPull:
+        # dividir o array de merges em 4 subarrays
+        qntd = len(merges)
+        qntdPorGrupo, sobra = divmod(qntd, 4)
+        chunks = []
+        inicio = 0
+        for i in range(4):
+            fim = inicio + qntdPorGrupo + (1 if i < sobra else 0) # ternário para que caso seja um grupo que tem a mais adicionar 1 item
+            chunks.append(merges[inicio:fim])
+            inicio = fim
+
+        # cria as threads
+        threads = []
+        for chunk in chunks:
+            thread = Thread(target=self.processarMergeOrReviewChunk, args=("merge", chunk,)) # precisa da , para tratar como tupla
+            thread.start()
+            threads.append(thread)
+
+        # espera as 4 threads acabarem
+        for thread in threads:
+            thread.join()
+
+    # chunk = array com números & autores de pull requests
+    def processarMergeOrReviewChunk(self, tipo: str, chunk):
+        for i in range(len(chunk)):
+            if (tipo == 'merge'):
+                self.aumentarContadorRequest()
+                print(f"Buscando merge #{chunk[i]['num']}...")
+                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=self.headers)
+                req.raise_for_status()
+                pull = req.json()
+                time.sleep(0.5)
+                if not pull['merged_by'] or pull['merged_by']['login'] ==  chunk[i]['autorDoPull']:
+                    continue
+                self.__mapaUsuarios.buscarOuRegistrar(pull['merged_by']['login'])
+                interacao = Interacao(pull['merged_by']['login'], chunk[i]['autorDoPull'], self.PESOS['merge_pull'], "merge_pull")
+                self.addInteraction(interacao)
                 continue
 
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoPull)
-
-            i = Interacao(mergeAutor, autorDoPull, self.PESOS["merge_pull"], "merge_pull")
-            self.addInteraction(i)
-
+            reviews = self.minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 0.5, f"Buscando reviews do pull {chunk[i]['num']}...")
+            self.__mapaUsuarios.buscarOuRegistrar(chunk[i]["autorDoPull"])
+            for revisao in reviews:
+                if not revisao.get("user") or revisao["user"]["login"] == chunk[i]["autorDoPull"]:  # pula revisões sem usuário & verifica loops
+                    continue
+                # registra o autor
+                self.__mapaUsuarios.buscarOuRegistrar(revisao["user"]["login"])
+                # registra a interação
+                interacao = Interacao(revisao["user"]["login"], chunk[i]['autorDoPull'], self.PESOS["revisao_pull"], "revisao_pull")
+                self.addInteraction(interacao)
+            time.sleep(0.5)
 
