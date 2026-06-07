@@ -56,6 +56,17 @@ class Minerador:
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
         print(f" --- Começando minerador: {self.repositorio}  ---")
+
+        try:
+            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.headers)
+            if req.status_code == 404:
+                print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
+                return
+            req.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f"Erro ao acessar o repositório '{self.repositorio}': {e}")
+            return
+
         # informações básicas
         thread1 = Thread(target=lambda: self.buscarIssues(sleepTime))
         thread2 = Thread(target=lambda: self.buscarPullRequests(sleepTime))
