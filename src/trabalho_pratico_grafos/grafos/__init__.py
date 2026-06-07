@@ -1,4 +1,5 @@
-from .vertice import Vertice
-from .aresta import Aresta
+from .grafo_abstrato import GrafoAbstrato
+from .grafo_lista import GrafoListaAdjacencia
+from .grafo_matriz import GrafoMatrizAdjacencia
 
-__all__ = ["Vertice", "Aresta"]
+__all__ = ["GrafoAbstrato", "GrafoListaAdjacencia", "GrafoMatrizAdjacencia"]
