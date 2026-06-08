@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import time
+from typing import TypedDict
 import requests
 from threading import Thread, Lock
 
@@ -12,22 +13,29 @@ class Interacao:
     peso: int
     tipo: str
 
+class TokenData(TypedDict):
+    token: str
+    usos: int
+
 class Minerador:
     urlBase: str = "https://api.github.com"
     repositorio: str
-    headers: dict
 
     __mapaUsuarios: MapaUsuarios
     mapaInteracoes: dict[tuple[str, str, str], Interacao]
     __interacoesLock: Lock
 
-    __contadorRequests: int = 0
     contadorGeralInteracoes: int = 0
+    __contadorRequests: int = 0
+    __requestsContadorLock: Lock
 
     __autoresIssuesPRs: dict[str, str]
 
     __pullRequests: list[dict]
     __issues: list[dict]
+
+    __tokens: list[TokenData]
+    __tokenLock: Lock
 
     PESOS = {
         # colocar mais pesos depois
@@ -38,27 +46,44 @@ class Minerador:
         "revisao_pull": 4
     }
 
-    def __init__(self, repositorio: str, token: str) -> None:
+    def __init__(self, repositorio: str, tokens: list[str]) -> None:
         self.repositorio = repositorio
-        self.headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-        }
+        if len(tokens) <= 0: raise ValueError("A lista de tokens não pode ser vazia!")
+
         self.__mapaUsuarios = MapaUsuarios()
         self.mapaInteracoes = {}
         self.__interacoesLock = Lock()
         self.__requestsContadorLock = Lock()
+        self.__tokens = [{"token": t, "usos": 0} for t in tokens]
+        self.__tokenLock = Lock()
+
+    def getHeader(self) -> dict:
+        with self.__tokenLock:
+            # pega o token com a menor quantidade de usos por referência
+            tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"]) 
+            tokenMenosUsado["usos"] += 1
+            return {
+                "Authorization": f"Bearer {tokenMenosUsado['token']}",
+                "Accept": "application/vnd.github+json"
+            }
+
 
     def aumentarContadorRequest(self):
         with self.__requestsContadorLock:
             self.__contadorRequests += 1
+
+    def exibirRelatorioTokens(self):
+        print("---= Relatório de Tokens =---")
+        for i in range(len(self.__tokens)):
+            print(f"Token {i+1}: {self.__tokens[i]['usos']} usos")
+        print("---== -----+-----+----- ==---")
 
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
         print(f" --- Começando minerador: {self.repositorio}  ---")
 
         try:
-            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.headers)
+            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.getHeader())
             if req.status_code == 404:
                 print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
                 return
@@ -80,23 +105,18 @@ class Minerador:
         self.definirAutoresIssuesPRs()
 
         # informações específicas
-        thread3 = Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime))
-        thread4 = Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime))
-        thread5 = Thread(target=lambda: self.minerarFechamentoIssues(sleepTime))
-        thread6 = Thread(target=self.minerarRevisoesPullRequests)
-        thread7 = Thread(target=self.minerarMergePullRequests)
+        threads = []
+        threads.append(Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime)))
+        threads.append(Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime)))
+        threads.append(Thread(target=lambda: self.minerarFechamentoIssues(sleepTime)))
+        threads.append(Thread(target=self.minerarRevisoesPullRequests))
+        threads.append(Thread(target=self.minerarMergePullRequests))
 
-        thread3.start()
-        thread4.start()
-        thread5.start()
-        thread6.start()
-        thread7.start()
+        for thread in threads:
+            thread.start()
 
-        thread3.join()
-        thread4.join()
-        thread5.join()
-        thread6.join()
-        thread7.join()
+        for thread in threads:
+            thread.join()
 
         tempoTotal = time.time() - inicio
         print(f" --- Fim minerador: {self.repositorio} ({tempoTotal:.2f}s) ---")
@@ -140,6 +160,7 @@ class Minerador:
 
         nextPage = f"{self.urlBase}/{endpoint}"
         ultimoId = None
+        headers = self.getHeader()
 
         while nextPage:
             self.aumentarContadorRequest()
@@ -147,7 +168,7 @@ class Minerador:
             req = requests.get(
                 nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
-                headers=self.headers
+                headers=headers
             )
 
             req.raise_for_status() # se a request der ruim para a execução
@@ -309,11 +330,12 @@ class Minerador:
 
     # chunk = array com números & autores de pull requests
     def processarMergeOrReviewChunk(self, tipo: str, chunk):
+        headers = self.getHeader()
         for i in range(len(chunk)):
             if (tipo == 'merge'):
                 self.aumentarContadorRequest()
                 print(f"Buscando merge #{chunk[i]['num']}...")
-                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=self.headers)
+                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers)
                 req.raise_for_status()
                 pull = req.json()
                 time.sleep(0.5)
