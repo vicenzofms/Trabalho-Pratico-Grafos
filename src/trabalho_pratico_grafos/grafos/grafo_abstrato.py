@@ -178,6 +178,14 @@ class GrafoAbstrato(ABC):
         pass
 
     @abstractmethod
+    def getPredecessores(self, u: int) -> list[int]:
+        pass
+
+    @abstractmethod
+    def getSucessores(self, u: int) -> list[int]:
+        pass
+
+    @abstractmethod
     def _inserirAresta(self, u: int, v: int, peso: float) -> None:
         pass
 

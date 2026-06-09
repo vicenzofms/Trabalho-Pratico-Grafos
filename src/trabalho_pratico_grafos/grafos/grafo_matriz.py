@@ -38,6 +38,22 @@ class GrafoMatrizAdjacencia(GrafoAbstrato):
             return False
         self._validarIndices(u, v)
         return self.matriz[v][u] != 0.0
+
+    def getPredecessores(self, u: int) -> list[int]:
+        self._validarIndices(u)
+        predecessores = []
+        for i in range(self.getQuantidadeVertices()):
+            if self.matriz[i][u] != 0.0:
+                predecessores.append(i)
+        return predecessores
+       
+    def getSucessores(self, u: int) -> list[int]:
+        self._validarIndices(u)
+        sucessores = []
+        for i in range(self.getQuantidadeVertices()):
+            if self.matriz[u][i] != 0.0:
+                sucessores.append(i)
+        return sucessores
        
     def _inserirAresta(self, u: int, v: int, peso: float) -> None:
         # lógicas de validação já foram feitas no Template Method
