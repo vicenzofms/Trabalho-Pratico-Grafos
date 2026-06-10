@@ -63,7 +63,7 @@ class Minerador:
             tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"]) 
             tokenMenosUsado["usos"] += 1
             return {
-                "Authorization": f"Bearer {tokenMenosUsado['token']}",
+                "Authorization": f"token {tokenMenosUsado['token']}",
                 "Accept": "application/vnd.github+json"
             }
 
