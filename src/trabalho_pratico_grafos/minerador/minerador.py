@@ -1,10 +1,24 @@
 from dataclasses import dataclass
 import time
-from typing import TypedDict
-import requests
+from typing import TypedDict, Literal
+import requests  
 from threading import Thread, Lock
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
+
+Cor = Literal["nenhuma","vermelho", "verde", "amarelo", "azul", "roxo", "ciano"]
+
+CORES: dict[Cor, str] = {
+    "nenhuma" : "",
+    "vermelho": "\033[31m",
+    "verde": "\033[32m",
+    "amarelo": "\033[33m",
+    "azul": "\033[34m",
+    "roxo": "\033[35m",
+    "ciano": "\033[36m",
+}
+
+RESET = "\033[0m"
 
 @dataclass
 class Interacao:
@@ -12,6 +26,13 @@ class Interacao:
     alvo: str
     peso: int
     tipo: str
+
+@dataclass(frozen=True, slots=True)
+class MinerarOpcoes:
+    sleepTime: float = 0.8
+    desc: str = ""
+    cor: Cor = "nenhuma"
+    header: dict | None = None
 
 class TokenData(TypedDict):
     token: str
@@ -45,6 +66,8 @@ class Minerador:
         "merge_pull": 5,
         "revisao_pull": 4
     }
+
+
 
     def __init__(self, repositorio: str, tokens: list[str]) -> None:
         self.repositorio = repositorio
@@ -80,10 +103,10 @@ class Minerador:
 
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
-        print(f" --- Começando minerador: {self.repositorio}  ---")
+        print(f" --- Começando minerador: {CORES['amarelo']}{self.repositorio}{RESET}  ---")
 
         try:
-            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.getHeader())
+            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.getHeader(), timeout=20)
             if req.status_code == 404:
                 print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
                 return
@@ -108,7 +131,7 @@ class Minerador:
         threads = []
         threads.append(Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime)))
         threads.append(Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime)))
-        threads.append(Thread(target=lambda: self.minerarFechamentoIssues(sleepTime)))
+        threads.append(Thread(target=self.minerarFechamentoIssues))
         threads.append(Thread(target=self.minerarRevisoesPullRequests))
         threads.append(Thread(target=self.minerarMergePullRequests))
 
@@ -119,7 +142,7 @@ class Minerador:
             thread.join()
 
         tempoTotal = time.time() - inicio
-        print(f" --- Fim minerador: {self.repositorio} ({tempoTotal:.2f}s) ---")
+        print(f" --- Fim minerador: {self.repositorio} ({CORES['amarelo']}{tempoTotal:.2f}s{RESET}) ---")
         print(f" --- Total de requests: {self.__contadorRequests} ---")
 
     # Só lista as interações, mais usado pra debug
@@ -149,26 +172,27 @@ class Minerador:
     def verUsuarios(self):
         self.__mapaUsuarios.listarUsuarios()
 
-    def minerar(self, endpoint: str, sleepTime: float, desc: str = "", params: dict = {}) -> list[dict]:
+    def minerar(self, endpoint: str, opts: MinerarOpcoes | None = None, params: dict = {}) -> list[dict]:
+        opts = opts or MinerarOpcoes()
         # minera um endpoint até o final, todas as páginas
         resultado = []
         paginaAtual = 1
 
-        description = desc
-        if (len(desc) <= 0):
+        description = opts.desc
+        if (len(description) <= 0):
             description = f"Fazendo request {endpoint}..."
 
         nextPage = f"{self.urlBase}/{endpoint}"
         ultimoId = None
-        headers = self.getHeader()
+        headers = opts.header or self.getHeader()
 
         while nextPage:
             self.aumentarContadorRequest()
-            print(f"{description}...")
+            print(f"{CORES[opts.cor]}{description}...{RESET}")
             req = requests.get(
                 nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
-                headers=headers
+                headers=headers, timeout=20
             )
 
             req.raise_for_status() # se a request der ruim para a execução
@@ -191,14 +215,18 @@ class Minerador:
 
             # ainda faltam páginas
             paginaAtual += 1
-            time.sleep(sleepTime) # faz ~4500 req/hora
+            time.sleep(opts.sleepTime) # faz ~4500 req/hora se com sleepTime padrão
         return resultado
 
     def buscarPullRequests(self, sleepTime: float) -> None:
-        self.__pullRequests = self.minerar(f"repos/{self.repositorio}/pulls", sleepTime, desc="Buscando PRs do repositório...",params={ "state": "all" })
+        self.__pullRequests = self.minerar(f"repos/{self.repositorio}/pulls",
+                                           MinerarOpcoes(sleepTime, "Buscando PRs do repositório...", "ciano"),
+                                           params={ "state": "all" })
 
     def buscarIssues(self, sleepTime: float) -> None:
-        self.__issues = self.minerar(f"repos/{self.repositorio}/issues", sleepTime, desc="Buscando issues do repositório...",params={ "state": "all" })
+        self.__issues = self.minerar(f"repos/{self.repositorio}/issues", 
+                                     MinerarOpcoes(sleepTime, "Buscando issues do repositório...", "azul"),
+                                     params={ "state": "all" })
 
     def definirAutoresIssuesPRs(self) -> None:
         self.__autoresIssuesPRs = dict()
@@ -209,7 +237,8 @@ class Minerador:
             self.__autoresIssuesPRs[str(pr['number'])] = pr['user']['login']
 
     def minerarComentariosIssuesPR(self, sleepTime) -> None:
-        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", sleepTime, desc=f"Buscando comentários das issues...")
+        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", 
+                                   MinerarOpcoes(sleepTime, "Buscando comentários das issues...", "amarelo"))
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
@@ -233,7 +262,8 @@ class Minerador:
             self.addInteraction(i)
 
     def minerarComentariosInlinePullRequest(self, sleepTime) -> None:
-        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", sleepTime, desc=f"Buscando comentários dos pull requests...")
+        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", 
+                                   MinerarOpcoes(sleepTime, "Buscando comentários dos pull requests...", "azul"))
 
         for comentario in comentarios:
             autorDoComentario = comentario["user"]["login"]
@@ -256,7 +286,7 @@ class Minerador:
             i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentario_pull_request")
             self.addInteraction(i)
 
-    def minerarFechamentoIssues(self, sleepTime: float) -> None:
+    def minerarFechamentoIssues(self) -> None:
         for issue in self.__issues:
             if not issue["closed_by"] or issue.get("pull_request"):
                 continue;
@@ -290,7 +320,7 @@ class Minerador:
         # cria as threads
         threads = []
         for chunk in chunks:
-            thread = Thread(target=self.processarMergeOrReviewChunk, args=("review", chunk,)) # precisa da , no final para tratar como tupla
+            thread = Thread(target=self.processarMergeOrReviewChunk, args=("review", chunk, "ciano",)) # precisa da , no final para tratar como tupla
             thread.start()
             threads.append(thread)
 
@@ -320,7 +350,7 @@ class Minerador:
         # cria as threads
         threads = []
         for chunk in chunks:
-            thread = Thread(target=self.processarMergeOrReviewChunk, args=("merge", chunk,)) # precisa da , para tratar como tupla
+            thread = Thread(target=self.processarMergeOrReviewChunk, args=("merge", chunk, "verde")) # precisa da , para tratar como tupla
             thread.start()
             threads.append(thread)
 
@@ -329,13 +359,13 @@ class Minerador:
             thread.join()
 
     # chunk = array com números & autores de pull requests
-    def processarMergeOrReviewChunk(self, tipo: str, chunk):
+    def processarMergeOrReviewChunk(self, tipo: str, chunk, cor: Cor):
         headers = self.getHeader()
         for i in range(len(chunk)):
             if (tipo == 'merge'):
                 self.aumentarContadorRequest()
-                print(f"Buscando merge #{chunk[i]['num']}...")
-                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers)
+                print(f"{CORES[cor]}Buscando merge #{chunk[i]['num']}...{RESET}")
+                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers, timeout=20)
                 req.raise_for_status()
                 pull = req.json()
                 time.sleep(0.5)
@@ -346,7 +376,8 @@ class Minerador:
                 self.addInteraction(interacao)
                 continue
 
-            reviews = self.minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 0.5, f"Buscando reviews do pull {chunk[i]['num']}...")
+            reviews = self.minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 
+                                   MinerarOpcoes(0.5, f"Buscando reviews do pull {chunk[i]['num']}...", cor, headers))
             self.__mapaUsuarios.buscarOuRegistrar(chunk[i]["autorDoPull"])
             for revisao in reviews:
                 if not revisao.get("user") or revisao["user"]["login"] == chunk[i]["autorDoPull"]:  # pula revisões sem usuário & verifica loops
