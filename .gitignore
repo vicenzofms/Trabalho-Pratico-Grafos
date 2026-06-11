@@ -220,3 +220,5 @@ teste_minerador.py
 
 .codegraph/
 *.DS_STORE
+src/data/*
+docs/plans

@@ -45,10 +45,10 @@ class Minerador:
     repositorio: str
 
     __mapaUsuarios: MapaUsuarios
-    mapaInteracoes: dict[tuple[str, str, str], Interacao]
+    __mapaInteracoes: dict[tuple[str, str, str], Interacao]
     __interacoesLock: Lock
 
-    contadorGeralInteracoes: int = 0
+    __contadorGeralInteracoes: int = 0
     __contadorRequests: int = 0
     __requestsContadorLock: Lock
 
@@ -69,21 +69,19 @@ class Minerador:
         "revisao_pull": 4
     }
 
-
-
     def __init__(self, repositorio: str, tokens: list[str], usar_cache: bool = False) -> None:
         self.repositorio = repositorio
         self.usar_cache = usar_cache
         if len(tokens) <= 0: raise ValueError("A lista de tokens não pode ser vazia!")
 
         self.__mapaUsuarios = MapaUsuarios()
-        self.mapaInteracoes = {}
+        self.__mapaInteracoes = {}
         self.__interacoesLock = Lock()
         self.__requestsContadorLock = Lock()
         self.__tokens = [{"token": t, "usos": 0} for t in tokens]
         self.__tokenLock = Lock()
 
-    def getHeader(self) -> dict:
+    def __getHeader(self) -> dict:
         with self.__tokenLock:
             # pega o token com a menor quantidade de usos por referência
             tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"])
@@ -103,11 +101,13 @@ class Minerador:
         try:
             with open(caminho, 'r') as f:
                 dados = json.load(f)
-                self.mapaInteracoes = {}
+                self.__mapaInteracoes = {}
                 for chave, interacao in dados.items():
                     quem, alvo, tipo = eval(chave)  # reconstrói a tupla
-                    self.mapaInteracoes[(quem, alvo, tipo)] = Interacao(**interacao)
-                self.contadorGeralInteracoes = len(self.mapaInteracoes)
+                    self.__mapaUsuarios.buscarOuRegistrar(quem)
+                    self.__mapaUsuarios.buscarOuRegistrar(alvo)
+                    self.__mapaInteracoes[(quem, alvo, tipo)] = Interacao(**interacao)
+                self.__contadorGeralInteracoes = len(self.__mapaInteracoes)
             print(f"Cache carregado de {caminho}")
             return True
         except Exception as e:
@@ -118,7 +118,7 @@ class Minerador:
         caminho = self.__obterCaminhoCache()
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
         try:
-            dados = {str(chave): asdict(valor) for chave, valor in self.mapaInteracoes.items()}
+            dados = {str(chave): asdict(valor) for chave, valor in self.__mapaInteracoes.items()}
             with open(caminho, 'w') as f:
                 json.dump(dados, f, indent=2)
             print(f"Cache salvo em {caminho}")
@@ -126,7 +126,7 @@ class Minerador:
             print(f"Erro ao salvar cache: {e}")
 
 
-    def aumentarContadorRequest(self):
+    def __aumentarContadorRequest(self):
         with self.__requestsContadorLock:
             self.__contadorRequests += 1
 
@@ -146,7 +146,7 @@ class Minerador:
             return
 
         try:
-            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.getHeader(), timeout=20)
+            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.__getHeader())
             if req.status_code == 404:
                 print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
                 return
@@ -159,8 +159,8 @@ class Minerador:
             return
 
         # informações básicas
-        thread1 = Thread(target=lambda: self.buscarIssues(sleepTime))
-        thread2 = Thread(target=lambda: self.buscarPullRequests(sleepTime))
+        thread1 = Thread(target=lambda: self.__buscarIssues(sleepTime))
+        thread2 = Thread(target=lambda: self.__buscarPullRequests(sleepTime))
 
         thread1.start()
         thread2.start()
@@ -168,15 +168,15 @@ class Minerador:
         thread1.join()
         thread2.join()
 
-        self.definirAutoresIssuesPRs()
+        self.__definirAutoresIssuesPRs()
 
         # informações específicas
         threads = []
-        threads.append(Thread(target=lambda: self.minerarComentariosIssuesPR(sleepTime)))
-        threads.append(Thread(target=lambda: self.minerarComentariosInlinePullRequest(sleepTime)))
-        threads.append(Thread(target=self.minerarFechamentoIssues))
-        threads.append(Thread(target=self.minerarRevisoesPullRequests))
-        threads.append(Thread(target=self.minerarMergePullRequests))
+        threads.append(Thread(target=lambda: self.__minerarComentariosIssuesPR(sleepTime)))
+        threads.append(Thread(target=lambda: self.__minerarComentariosInlinePullRequest(sleepTime)))
+        threads.append(Thread(target=self.__minerarFechamentoIssues))
+        threads.append(Thread(target=self.__minerarRevisoesPullRequests))
+        threads.append(Thread(target=self.__minerarMergePullRequests))
 
         for thread in threads:
             thread.start()
@@ -194,24 +194,27 @@ class Minerador:
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
-        for key, value in self.mapaInteracoes.items():
+        for key, value in self.__mapaInteracoes.items():
             print(f"{key}: {value}")
 
     def quantidadeInteracoes(self):
-        return len(self.mapaInteracoes)
+        return len(self.__mapaInteracoes)
+
+    def quantidadeGeralInteracoes(self):
+        return self.__contadorGeralInteracoes
 
     def quantidadeUsuarios(self):
         return self.__mapaUsuarios.quantidadeDeUsuarios()
 
-    def addInteraction(self, interacao: Interacao):
+    def __addInteraction(self, interacao: Interacao):
         with self.__interacoesLock:
-            self.contadorGeralInteracoes += 1
+            self.__contadorGeralInteracoes += 1
             chave = (interacao.quemFez, interacao.alvo, interacao.tipo)
-            existente = self.mapaInteracoes.get(chave)
+            existente = self.__mapaInteracoes.get(chave)
             if existente:
                 existente.peso += interacao.peso
                 return
-            self.mapaInteracoes[chave] = interacao
+            self.__mapaInteracoes[chave] = interacao
 
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
@@ -219,7 +222,7 @@ class Minerador:
     def verUsuarios(self):
         self.__mapaUsuarios.listarUsuarios()
 
-    def minerar(self, endpoint: str, opts: MinerarOpcoes | None = None, params: dict = {}) -> list[dict]:
+    def __minerar(self, endpoint: str, opts: MinerarOpcoes | None = None, params: dict = {}) -> list[dict]:
         opts = opts or MinerarOpcoes()
         # minera um endpoint até o final, todas as páginas
         resultado = []
@@ -231,16 +234,15 @@ class Minerador:
 
         nextPage = f"{self.urlBase}/{endpoint}"
         ultimoId = None
-        headers = opts.header or self.getHeader()
+        headers = opts.header or self.__getHeader()
 
         while nextPage:
-            self.aumentarContadorRequest()
+            self.__aumentarContadorRequest()
             print(f"{CORES[opts.cor]}{description}...{RESET}")
             req = requests.get(
                 nextPage,
                 { **params, "per_page": 100, "page": paginaAtual },
-                headers=headers, timeout=20
-            )
+                headers=headers)
 
             req.raise_for_status() # se a request der ruim para a execução
             data = req.json()
@@ -265,17 +267,17 @@ class Minerador:
             time.sleep(opts.sleepTime) # faz ~4500 req/hora se com sleepTime padrão
         return resultado
 
-    def buscarPullRequests(self, sleepTime: float) -> None:
-        self.__pullRequests = self.minerar(f"repos/{self.repositorio}/pulls",
+    def __buscarPullRequests(self, sleepTime: float) -> None:
+        self.__pullRequests = self.__minerar(f"repos/{self.repositorio}/pulls",
                                            MinerarOpcoes(sleepTime, "Buscando PRs do repositório...", "ciano"),
                                            params={ "state": "all" })
 
-    def buscarIssues(self, sleepTime: float) -> None:
-        self.__issues = self.minerar(f"repos/{self.repositorio}/issues", 
+    def __buscarIssues(self, sleepTime: float) -> None:
+        self.__issues = self.__minerar(f"repos/{self.repositorio}/issues", 
                                      MinerarOpcoes(sleepTime, "Buscando issues do repositório...", "azul"),
                                      params={ "state": "all" })
 
-    def definirAutoresIssuesPRs(self) -> None:
+    def __definirAutoresIssuesPRs(self) -> None:
         self.__autoresIssuesPRs = dict()
         for issue in self.__issues:
             self.__autoresIssuesPRs[str(issue['number'])] = issue['user']['login']
@@ -283,8 +285,8 @@ class Minerador:
         for pr in self.__pullRequests:
             self.__autoresIssuesPRs[str(pr['number'])] = pr['user']['login']
 
-    def minerarComentariosIssuesPR(self, sleepTime) -> None:
-        comentarios = self.minerar(f"repos/{self.repositorio}/issues/comments", 
+    def __minerarComentariosIssuesPR(self, sleepTime) -> None:
+        comentarios = self.__minerar(f"repos/{self.repositorio}/issues/comments", 
                                    MinerarOpcoes(sleepTime, "Buscando comentários das issues...", "amarelo"))
 
         for comentario in comentarios:
@@ -306,10 +308,10 @@ class Minerador:
 
             # registra a interação
             i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentario_issue")
-            self.addInteraction(i)
+            self.__addInteraction(i)
 
-    def minerarComentariosInlinePullRequest(self, sleepTime) -> None:
-        comentarios = self.minerar(f"repos/{self.repositorio}/pulls/comments", 
+    def __minerarComentariosInlinePullRequest(self, sleepTime) -> None:
+        comentarios = self.__minerar(f"repos/{self.repositorio}/pulls/comments", 
                                    MinerarOpcoes(sleepTime, "Buscando comentários dos pull requests...", "azul"))
 
         for comentario in comentarios:
@@ -331,9 +333,9 @@ class Minerador:
 
             # registra a interação
             i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentario_pull_request")
-            self.addInteraction(i)
+            self.__addInteraction(i)
 
-    def minerarFechamentoIssues(self) -> None:
+    def __minerarFechamentoIssues(self) -> None:
         for issue in self.__issues:
             if not issue["closed_by"] or issue.get("pull_request"):
                 continue;
@@ -350,10 +352,10 @@ class Minerador:
 
             # registra a interação
             i = Interacao(quemFez, autorDaIssue, self.PESOS["fechamento_issue"], "fechamento_issue")
-            self.addInteraction(i)
+            self.__addInteraction(i)
 
 
-    def minerarRevisoesPullRequests(self) -> None:
+    def __minerarRevisoesPullRequests(self) -> None:
         # dividir o array de prs em 4 subarrays
         qntd = len(self.__pullRequests)
         qntdPorGrupo, sobra = divmod(qntd, 4)
@@ -367,7 +369,7 @@ class Minerador:
         # cria as threads
         threads = []
         for chunk in chunks:
-            thread = Thread(target=self.processarMergeOrReviewChunk, args=("review", chunk, "ciano",)) # precisa da , no final para tratar como tupla
+            thread = Thread(target=self.__processarMergeOrReviewChunk, args=("review", chunk, "ciano",)) # precisa da , no final para tratar como tupla
             thread.start()
             threads.append(thread)
 
@@ -375,7 +377,7 @@ class Minerador:
         for thread in threads:
             thread.join()
 
-    def minerarMergePullRequests(self) -> None:
+    def __minerarMergePullRequests(self) -> None:
         merges = []
         for pull in self.__pullRequests:
             if not pull.get("merged_at"):
@@ -397,7 +399,7 @@ class Minerador:
         # cria as threads
         threads = []
         for chunk in chunks:
-            thread = Thread(target=self.processarMergeOrReviewChunk, args=("merge", chunk, "verde")) # precisa da , para tratar como tupla
+            thread = Thread(target=self.__processarMergeOrReviewChunk, args=("merge", chunk, "verde")) # precisa da , para tratar como tupla
             thread.start()
             threads.append(thread)
 
@@ -406,13 +408,13 @@ class Minerador:
             thread.join()
 
     # chunk = array com números & autores de pull requests
-    def processarMergeOrReviewChunk(self, tipo: str, chunk, cor: Cor):
-        headers = self.getHeader()
+    def __processarMergeOrReviewChunk(self, tipo: str, chunk, cor: Cor):
+        headers = self.__getHeader()
         for i in range(len(chunk)):
             if (tipo == 'merge'):
-                self.aumentarContadorRequest()
+                self.__aumentarContadorRequest()
                 print(f"{CORES[cor]}Buscando merge #{chunk[i]['num']}...{RESET}")
-                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers, timeout=20)
+                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers)
                 req.raise_for_status()
                 pull = req.json()
                 time.sleep(0.5)
@@ -420,10 +422,10 @@ class Minerador:
                     continue
                 self.__mapaUsuarios.buscarOuRegistrar(pull['merged_by']['login'])
                 interacao = Interacao(pull['merged_by']['login'], chunk[i]['autorDoPull'], self.PESOS['merge_pull'], "merge_pull")
-                self.addInteraction(interacao)
+                self.__addInteraction(interacao)
                 continue
 
-            reviews = self.minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 
+            reviews = self.__minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 
                                    MinerarOpcoes(0.5, f"Buscando reviews do pull {chunk[i]['num']}...", cor, headers))
             self.__mapaUsuarios.buscarOuRegistrar(chunk[i]["autorDoPull"])
             for revisao in reviews:
@@ -433,6 +435,6 @@ class Minerador:
                 self.__mapaUsuarios.buscarOuRegistrar(revisao["user"]["login"])
                 # registra a interação
                 interacao = Interacao(revisao["user"]["login"], chunk[i]['autorDoPull'], self.PESOS["revisao_pull"], "revisao_pull")
-                self.addInteraction(interacao)
+                self.__addInteraction(interacao)
             time.sleep(0.5)
 
