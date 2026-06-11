@@ -1,5 +1,6 @@
 # Script para testes dos grafos
 # Não dê commit nos seus tokens!
+from trabalho_pratico_grafos.gephi.gephi import para_gephi
 from trabalho_pratico_grafos.minerador import Minerador
 from trabalho_pratico_grafos.grafos import *
 
@@ -35,6 +36,7 @@ def construirGrafoPorTipo(dados: dict, tipos: set[str]) -> GrafoAbstrato:
         indiceU = mapaIds[interacao['origem']]
         indiceV = mapaIds[interacao['destino']]
         agregarAresta(grafo, indiceU, indiceV, interacao['peso'])
+    definirRotulos(grafo, usernames)
     return grafo
 
 # Definições Gerais
@@ -57,5 +59,6 @@ print(f"Fechamento: {grafoFechamento.qntdVertices} vertices / {grafoFechamento.q
 print(f"PR Interações: {grafoPR_Interacoes.qntdVertices} vertices / {grafoPR_Interacoes.qntdArestas} arestas")
 print("---- Grafos ----")
 
+para_gephi(grafoGeral, "grafo_geral_discordjs")
         
 
