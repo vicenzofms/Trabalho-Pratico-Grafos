@@ -1,8 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import time
 from typing import TypedDict, Literal
 import requests  
 from threading import Thread, Lock
+import json
+import os
 
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -69,8 +71,9 @@ class Minerador:
 
 
 
-    def __init__(self, repositorio: str, tokens: list[str]) -> None:
+    def __init__(self, repositorio: str, tokens: list[str], usar_cache: bool = False) -> None:
         self.repositorio = repositorio
+        self.usar_cache = usar_cache
         if len(tokens) <= 0: raise ValueError("A lista de tokens não pode ser vazia!")
 
         self.__mapaUsuarios = MapaUsuarios()
@@ -83,12 +86,44 @@ class Minerador:
     def getHeader(self) -> dict:
         with self.__tokenLock:
             # pega o token com a menor quantidade de usos por referência
-            tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"]) 
+            tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"])
             tokenMenosUsado["usos"] += 1
             return {
-                "Authorization": f"token {tokenMenosUsado['token']}",
+                "Authorization": f"Bearer {tokenMenosUsado['token']}",
                 "Accept": "application/vnd.github+json"
             }
+
+    def __obterCaminhoCache(self) -> str:
+        return os.path.join(os.path.dirname(__file__), "..", "..", "data", f"{self.repositorio.replace('/', '_')}.json")
+
+    def carregarDoCache(self) -> bool:
+        caminho = self.__obterCaminhoCache()
+        if not os.path.exists(caminho):
+            return False
+        try:
+            with open(caminho, 'r') as f:
+                dados = json.load(f)
+                self.mapaInteracoes = {}
+                for chave, interacao in dados.items():
+                    quem, alvo, tipo = eval(chave)  # reconstrói a tupla
+                    self.mapaInteracoes[(quem, alvo, tipo)] = Interacao(**interacao)
+                self.contadorGeralInteracoes = len(self.mapaInteracoes)
+            print(f"Cache carregado de {caminho}")
+            return True
+        except Exception as e:
+            print(f"Erro ao carregar cache: {e}")
+            return False
+
+    def salvarNoCache(self) -> None:
+        caminho = self.__obterCaminhoCache()
+        os.makedirs(os.path.dirname(caminho), exist_ok=True)
+        try:
+            dados = {str(chave): asdict(valor) for chave, valor in self.mapaInteracoes.items()}
+            with open(caminho, 'w') as f:
+                json.dump(dados, f, indent=2)
+            print(f"Cache salvo em {caminho}")
+        except Exception as e:
+            print(f"Erro ao salvar cache: {e}")
 
 
     def aumentarContadorRequest(self):
@@ -105,10 +140,18 @@ class Minerador:
         inicio = time.time()
         print(f" --- Começando minerador: {CORES['amarelo']}{self.repositorio}{RESET}  ---")
 
+        if self.usar_cache and self.carregarDoCache():
+            tempoTotal = time.time() - inicio
+            print(f" --- Fim minerador (cache): {self.repositorio} ({tempoTotal:.2f}s) ---")
+            return
+
         try:
             req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.getHeader(), timeout=20)
             if req.status_code == 404:
                 print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
+                return
+            elif req.status_code == 403:
+                print(f"Erro 403: Token inválido, expirado ou sem permissões. Configure um novo token via variável de ambiente GITHUB_TOKEN.")
                 return
             req.raise_for_status()
         except requests.exceptions.RequestException as e:
@@ -141,9 +184,13 @@ class Minerador:
         for thread in threads:
             thread.join()
 
+        if self.usar_cache:
+            self.salvarNoCache()
+
         tempoTotal = time.time() - inicio
         print(f" --- Fim minerador: {self.repositorio} ({CORES['amarelo']}{tempoTotal:.2f}s{RESET}) ---")
         print(f" --- Total de requests: {self.__contadorRequests} ---")
+
 
     # Só lista as interações, mais usado pra debug
     def verInteracoes(self):
