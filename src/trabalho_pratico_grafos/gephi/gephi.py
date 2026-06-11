@@ -2,7 +2,6 @@ import csv
 import os
 from trabalho_pratico_grafos.grafos.grafo_abstrato import GrafoAbstrato
 
-
 def para_gephi(grafo: GrafoAbstrato, nome: str, pasta: str | None = None) -> str:
     """Exporta o grafo para um CSV de arestas no formato esperado pelo Gephi em data/gephi/.
 
