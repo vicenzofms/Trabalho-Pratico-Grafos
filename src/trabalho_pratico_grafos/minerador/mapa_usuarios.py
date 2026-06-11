@@ -32,3 +32,10 @@ class MapaUsuarios:
         with self.__lock:
             for u in self.__ids:
                 print(u)
+
+    def exportarUsuarios(self) -> dict:
+        return {
+            "ids_por_login": self.__usuarios.copy(),
+            "logins_por_id": self.__ids.copy(),
+            "quantidade": len(self.__ids)
+        }

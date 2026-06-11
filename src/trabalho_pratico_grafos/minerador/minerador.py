@@ -437,4 +437,21 @@ class Minerador:
                 interacao = Interacao(revisao["user"]["login"], chunk[i]['autorDoPull'], self.PESOS["revisao_pull"], "revisao_pull")
                 self.__addInteraction(interacao)
             time.sleep(0.5)
+    
+    def exportarDados(self) -> dict | None:
+        if (self.__mapaUsuarios.quantidadeDeUsuarios() <= 0 or len(self.__mapaInteracoes) <= 0):
+            return None
+        # retorna cópia dos dados, evitando acesso por referência aos dados internos do minerador
+        return {
+            "usuarios": self.__mapaUsuarios.exportarUsuarios(),
+            "interacoes": [
+                {
+                    "origem": interacao.quemFez,
+                    "destino": interacao.alvo,
+                    "peso": interacao.peso,
+                    "tipo": interacao.tipo,
+                }
+                for interacao in self.__mapaInteracoes.values()
+            ]
+        }
 
