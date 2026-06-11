@@ -35,7 +35,7 @@ class MapaUsuarios:
 
     def exportarUsuarios(self) -> dict:
         return {
-            "ids_por_login": self.__usuarios.copy(),
-            "logins_por_id": self.__ids.copy(),
+            "ids_por_username": self.__usuarios.copy(),
+            "usernames_por_id": self.__ids.copy(),
             "quantidade": len(self.__ids)
         }
