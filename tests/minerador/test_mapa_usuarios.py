@@ -65,3 +65,33 @@ def test_quantidadeDeUsuarios_apos_registros():
 
     # Assert
     assert mapa.quantidadeDeUsuarios() == 2
+
+# Início dos testes em exportarUsuarios()
+def test_exportarUsuarios_estrutura():
+    # Arrange
+    mapa = MapaUsuarios()
+    mapa.buscarOuRegistrar("ana")
+    mapa.buscarOuRegistrar("bob")
+
+    # Act
+    exportado = mapa.exportarUsuarios()
+
+    # Assert
+    assert exportado["ids_por_username"] == {"ana": 0, "bob": 1}
+    assert exportado["usernames_por_id"] == ["ana", "bob"]
+    assert exportado["quantidade"] == 2
+
+def test_exportarUsuarios_retorna_copias():
+    # Arrange
+    mapa = MapaUsuarios()
+    mapa.buscarOuRegistrar("ana")
+
+    # Act: altero o dado exportado
+    exportado = mapa.exportarUsuarios()
+    exportado["ids_por_username"]["intruso"] = 99
+    exportado["usernames_por_id"].append("intruso")
+
+    # Assert: o mapa interno não pode ser afetado
+    assert mapa.quantidadeDeUsuarios() == 1
+    assert mapa.buscarNome(0) == "ana"
+# Fim dos testes em exportarUsuarios()

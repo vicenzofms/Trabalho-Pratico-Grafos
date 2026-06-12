@@ -1,67 +1,54 @@
 from dataclasses import dataclass, asdict
-import time
 from typing import TypedDict, Literal
-import requests  
 from threading import Thread, Lock
+from concurrent.futures import ThreadPoolExecutor, Future
 import json
+import time
 import os
 
+from trabalho_pratico_grafos.minerador.cliente_github import ClienteGithub, ErroRequestObrigatoria, MinerarOpcoes
+from trabalho_pratico_grafos.minerador.cores import colorir
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
-
-Cor = Literal["nenhuma","vermelho", "verde", "amarelo", "azul", "roxo", "ciano"]
-
-CORES: dict[Cor, str] = {
-    "nenhuma" : "",
-    "vermelho": "\033[31m",
-    "verde": "\033[32m",
-    "amarelo": "\033[33m",
-    "azul": "\033[34m",
-    "roxo": "\033[35m",
-    "ciano": "\033[36m",
-}
-
-RESET = "\033[0m"
 
 @dataclass
 class Interacao:
-    quemFez: str
-    alvo: str
+    origem: str
+    destino: str
     peso: int
     tipo: str
 
+TipoPendencia = Literal["comentarios_issues", "comentarios_prs", "reviews", "merge"]
 @dataclass(frozen=True, slots=True)
-class MinerarOpcoes:
-    sleepTime: float = 0.8
-    desc: str = ""
-    cor: Cor = "nenhuma"
-    header: dict | None = None
-
-class TokenData(TypedDict):
-    token: str
-    usos: int
+class RequestPendente:
+    endpoint: str
+    tipo: TipoPendencia
+    pagina: int | None = None # usadas para pendências de comentários issues/prs
+    autorPR: str | None = None # usado para pendências de review/merge
+    numeroPR: int | None = None # usado para pendências de review/merge
 
 class Minerador:
-    urlBase: str = "https://api.github.com"
-    repositorio: str
+    __urlBase: str = "https://api.github.com"
+    __clienteGithub: ClienteGithub
+    __repositorio: str
 
-    __mapaUsuarios: MapaUsuarios
-    __mapaInteracoes: dict[tuple[str, str, str], Interacao]
-    __interacoesLock: Lock
+    __contadorInteracoesRegistradas: int 
 
-    __contadorGeralInteracoes: int = 0
-    __contadorRequests: int = 0
-    __requestsContadorLock: Lock
+    # Lista de Requests que ficaram pendentes
+    __requestsPendentes: list[RequestPendente]
 
-    __autoresIssuesPRs: dict[str, str]
-
+    # Dados do Minerador
     __pullRequests: list[dict]
     __issues: list[dict]
+    __autoresIssuesPRs: dict[str, str]
+    __mapaUsuarios: MapaUsuarios
+    __mapaInteracoes: dict[tuple[str, str, str], Interacao]
 
-    __tokens: list[TokenData]
-    __tokenLock: Lock
+    # Locks
+    __interacoesLock: Lock
+    __pendenciasLock: Lock
 
+    # Usados para montar interações
     PESOS = {
-        # colocar mais pesos depois
         "comentario_issue": 2,
         "comentario_pull_request": 2,
         "fechamento_issue": 1,
@@ -70,29 +57,23 @@ class Minerador:
     }
 
     def __init__(self, repositorio: str, tokens: list[str], usar_cache: bool = False) -> None:
-        self.repositorio = repositorio
+        self.__repositorio = repositorio
         self.usar_cache = usar_cache
+
         if len(tokens) <= 0: raise ValueError("A lista de tokens não pode ser vazia!")
 
+        # Inicializações
+        self.__clienteGithub = ClienteGithub(tokens, self.__urlBase)
+        self.__contadorInteracoesRegistradas = 0
         self.__mapaUsuarios = MapaUsuarios()
         self.__mapaInteracoes = {}
+        self.__requestsPendentes = []
         self.__interacoesLock = Lock()
-        self.__requestsContadorLock = Lock()
-        self.__tokens = [{"token": t, "usos": 0} for t in tokens]
-        self.__tokenLock = Lock()
-
-    def __getHeader(self) -> dict:
-        with self.__tokenLock:
-            # pega o token com a menor quantidade de usos por referência
-            tokenMenosUsado = min(self.__tokens, key=lambda t: t["usos"])
-            tokenMenosUsado["usos"] += 1
-            return {
-                "Authorization": f"Bearer {tokenMenosUsado['token']}",
-                "Accept": "application/vnd.github+json"
-            }
-
+        self.__pendenciasLock = Lock()
+    
+    # --- Cache
     def __obterCaminhoCache(self) -> str:
-        return os.path.join(os.path.dirname(__file__), "..", "..", "data", f"{self.repositorio.replace('/', '_')}.json")
+        return os.path.join(os.path.dirname(__file__), "..", "..", "data", f"{self.__repositorio.replace('/', '_')}.json")
 
     def carregarDoCache(self) -> bool:
         caminho = self.__obterCaminhoCache()
@@ -107,11 +88,11 @@ class Minerador:
                     self.__mapaUsuarios.buscarOuRegistrar(quem)
                     self.__mapaUsuarios.buscarOuRegistrar(alvo)
                     self.__mapaInteracoes[(quem, alvo, tipo)] = Interacao(**interacao)
-                self.__contadorGeralInteracoes = len(self.__mapaInteracoes)
-            print(f"Cache carregado de {caminho}")
+                self.__contadorInteracoesRegistradas = len(self.__mapaInteracoes)
+            print(colorir(f"Cache carregado de {caminho}", "roxo"))
             return True
         except Exception as e:
-            print(f"Erro ao carregar cache: {e}")
+            print(colorir(f"Erro ao carregar cache: {e}", "vermelho"))
             return False
 
     def salvarNoCache(self) -> None:
@@ -121,224 +102,199 @@ class Minerador:
             dados = {str(chave): asdict(valor) for chave, valor in self.__mapaInteracoes.items()}
             with open(caminho, 'w') as f:
                 json.dump(dados, f, indent=2)
-            print(f"Cache salvo em {caminho}")
+            print(colorir(f"Cache salvo em {caminho}", "roxo"))
         except Exception as e:
-            print(f"Erro ao salvar cache: {e}")
-
-
-    def __aumentarContadorRequest(self):
-        with self.__requestsContadorLock:
-            self.__contadorRequests += 1
-
-    def exibirRelatorioTokens(self):
-        print("---= Relatório de Tokens =---")
-        for i in range(len(self.__tokens)):
-            print(f"Token {i+1}: {self.__tokens[i]['usos']} usos")
-        print("---== -----+-----+----- ==---")
+            print(colorir(f"Erro ao salvar cache: {e}", "vermelho"))
+    # --- Fim do Cache
 
     def executar(self, sleepTime: float = 0.8):
         inicio = time.time()
-        print(f" --- Começando minerador: {CORES['amarelo']}{self.repositorio}{RESET}  ---")
+        print(f"--- Começando minerador: {colorir(self.__repositorio, 'amarelo')} ---")
 
+        # Tentar cache
         if self.usar_cache and self.carregarDoCache():
             tempoTotal = time.time() - inicio
-            print(f" --- Fim minerador (cache): {self.repositorio} ({tempoTotal:.2f}s) ---")
+            print(f"--- Fim minerador (cache): {self.__repositorio} ({colorir(f'{tempoTotal:.2f}s', 'roxo')}) ---")
             return
 
+        # Verificar disponibilidade do repo
         try:
-            req = requests.get(f"{self.urlBase}/repos/{self.repositorio}", headers=self.__getHeader())
-            if req.status_code == 404:
-                print(f"Erro: Repositório '{self.repositorio}' não encontrado.")
-                return
-            elif req.status_code == 403:
-                print(f"Erro 403: Token inválido, expirado ou sem permissões. Configure um novo token via variável de ambiente GITHUB_TOKEN.")
-                return
-            req.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            print(f"Erro ao acessar o repositório '{self.repositorio}': {e}")
+            self.__clienteGithub.get(f"repos/{self.__repositorio}", obrigatorio=True, opts=MinerarOpcoes(desc="Verificando repositório...", cor="roxo"))
+        except ErroRequestObrigatoria as e:
+            print(f"Erro ao acessar o repositório '{self.__repositorio}': {e}")
             return
 
         # informações básicas
-        thread1 = Thread(target=lambda: self.__buscarIssues(sleepTime))
-        thread2 = Thread(target=lambda: self.__buscarPullRequests(sleepTime))
+        try:
+            # cria 2 threads e joga nelas a busca dos pull requests e issues, um em cada
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futureIssues = executor.submit(self.__buscarIssues, sleepTime)
+                futurePulls = executor.submit(self.__buscarPullRequests, sleepTime)
+                futureIssues.result()
+                futurePulls.result()
+        except ErroRequestObrigatoria as e:
+            # Alguma falhou e elas são obrigatórias, encerrando cedo...
+            print(f"Mineração Encerrada com Erro: {e}")
+            return
 
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
-
+        # mapear os autores no mapa de usuários
         self.__definirAutoresIssuesPRs()
 
         # informações específicas
-        threads = []
-        threads.append(Thread(target=lambda: self.__minerarComentariosIssuesPR(sleepTime)))
-        threads.append(Thread(target=lambda: self.__minerarComentariosInlinePullRequest(sleepTime)))
-        threads.append(Thread(target=self.__minerarFechamentoIssues))
-        threads.append(Thread(target=self.__minerarRevisoesPullRequests))
-        threads.append(Thread(target=self.__minerarMergePullRequests))
+        # aqui vamos ter mais uma pool de threads, porém com 8 para dividir todo o resto
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futuros: dict[Future, str] = {}
+            # Comentários são paginados
+            futuros[executor.submit(self.__minerarComentariosIssuesPR, sleepTime)] = "Minerando comentários de issues e PRs"
+            futuros[executor.submit(self.__minerarComentariosInlinePullRequest, sleepTime)] = "Minerando comentários de reviews de PRs"
+            # esse é rápido, sem requests
+            futuros[executor.submit(self.__processarFechamentoIssues)] = "Processando fechamento de issues" 
+            # Agora, para cada PR vou criar uma chamada para sua review
+            for pr in self.__pullRequests:
+                if pr.get("user") is None: continue
+                autorPR = pr["user"]["login"]
+                numeroPR = pr["number"]
+                futuros[executor.submit(self.__minerarReviewsDeUmPR, numeroPR, autorPR)] = f"Minerando reviews do PR #{numeroPR}"
+                # e caso ele tenha sido mergeado, crio uma chamada para olhar o merge
+                if pr.get("merged_at"):
+                    futuros[executor.submit(self.__minerarMergeDeUmPR, numeroPR, autorPR)] = f"Minerando merge do PR #{numeroPR}"
+            # Agora espera elas, em caso de erro avisa e continua as outras
+            for future, desc in futuros.items():
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Ocorreu um erro em \"{desc}\": {type(e).__name__} {e}")
 
-        for thread in threads:
-            thread.start()
+        tempoTotal = time.time() - inicio # salva tempo final antes de responder
+        if len(self.__requestsPendentes) > 0:
+            print(f"Existem {len(self.__requestsPendentes)} requests que não foram concluídas")
+            if input("Deseja tentar processá-las novamente? [s/N] -> ").strip().lower() == "s":
+                inicio2 = time.time()
+                self.__processarPendencias(sleepTime)
+                tempoTotal += (time.time() - inicio2)
+        if len(self.__requestsPendentes) > 0: # após reprocessar ainda há pendências
+            print(colorir("[AVISO]: não foi possível completar todas as requests, EXISTEM dados parciais", 'vermelho'))
 
-        for thread in threads:
-            thread.join()
-
+        # ao terminar se for para salvar cache é salvo
         if self.usar_cache:
             self.salvarNoCache()
 
-        tempoTotal = time.time() - inicio
-        print(f" --- Fim minerador: {self.repositorio} ({CORES['amarelo']}{tempoTotal:.2f}s{RESET}) ---")
-        print(f" --- Total de requests: {self.__contadorRequests} ---")
+        # Relatório final
+        print(f"--- Fim minerador: {colorir(self.__repositorio, 'amarelo')} ({colorir(f'{tempoTotal:.2f}s', 'roxo')}) ---")
+        print(f"--- Total de requests: {colorir(str(self.__clienteGithub.getQuantidadeRequests()), 'amarelo')} ---")
+        if len(self.__requestsPendentes) > 0: print(colorir(f"--- {len(self.__requestsPendentes)} requests perdidas ---", 'vermelho'))
+        print(f"--- {colorir(str(self.quantidadeUsuarios()), 'amarelo')} usuários | {colorir(str(self.quantidadeInteracoes()), 'amarelo')} interações distintas ---")
 
 
     # Só lista as interações, mais usado pra debug
-    def verInteracoes(self):
+    def exibirInteracoes(self):
         for key, value in self.__mapaInteracoes.items():
             print(f"{key}: {value}")
 
     def quantidadeInteracoes(self):
         return len(self.__mapaInteracoes)
 
-    def quantidadeGeralInteracoes(self):
-        return self.__contadorGeralInteracoes
+    def quantidadeInteracoesRegistradas(self):
+        return self.__contadorInteracoesRegistradas
 
     def quantidadeUsuarios(self):
         return self.__mapaUsuarios.quantidadeDeUsuarios()
 
-    def __addInteraction(self, interacao: Interacao):
+    def __adicionarInteracao(self, interacao: Interacao):
         with self.__interacoesLock:
-            self.__contadorGeralInteracoes += 1
-            chave = (interacao.quemFez, interacao.alvo, interacao.tipo)
+            self.__contadorInteracoesRegistradas += 1
+            chave = (interacao.origem, interacao.destino, interacao.tipo)
             existente = self.__mapaInteracoes.get(chave)
             if existente:
                 existente.peso += interacao.peso
                 return
             self.__mapaInteracoes[chave] = interacao
 
+    def __adicionarPendencia(self, pendencia: RequestPendente):
+        with self.__pendenciasLock:
+            self.__requestsPendentes.append(pendencia)
+
     # Só lista os usuarios que foram registrados, por causa do mapa ele não registra duplicado
     # por mais que a função seja chamada várias vezes pro mesmo usuário
     # tmb mais usado pra debug
-    def verUsuarios(self):
+    def exibirUsuarios(self):
         self.__mapaUsuarios.listarUsuarios()
 
-    def __minerar(self, endpoint: str, opts: MinerarOpcoes | None = None, params: dict = {}) -> list[dict]:
-        opts = opts or MinerarOpcoes()
-        # minera um endpoint até o final, todas as páginas
-        resultado = []
-        paginaAtual = 1
+    def exibirRelatorioTokens(self):
+        self.__clienteGithub.exibirRelatorioTokens()
 
-        description = opts.desc
-        if (len(description) <= 0):
-            description = f"Fazendo request {endpoint}..."
-
-        nextPage = f"{self.urlBase}/{endpoint}"
-        ultimoId = None
-        headers = opts.header or self.__getHeader()
-
-        while nextPage:
-            self.__aumentarContadorRequest()
-            print(f"{CORES[opts.cor]}{description}...{RESET}")
-            req = requests.get(
-                nextPage,
-                { **params, "per_page": 100, "page": paginaAtual },
-                headers=headers)
-
-            req.raise_for_status() # se a request der ruim para a execução
-            data = req.json()
-            if (not data):
-                break # cheguei no final, para o loop
-
-            idAtual = data[-1]["id"]
-
-            if idAtual == ultimoId:
-                break
-
-            ultimoId = idAtual
-
-            nextPage = req.links.get("next", {}).get("url")
-
-            resultado.extend(data)
-            if (len(data) < 100): # estou na última página
-                return resultado
-
-            # ainda faltam páginas
-            paginaAtual += 1
-            time.sleep(opts.sleepTime) # faz ~4500 req/hora se com sleepTime padrão
-        return resultado
-
+    # Buscas de Informações Primárias
     def __buscarPullRequests(self, sleepTime: float) -> None:
-        self.__pullRequests = self.__minerar(f"repos/{self.repositorio}/pulls",
-                                           MinerarOpcoes(sleepTime, "Buscando PRs do repositório...", "ciano"),
-                                           params={ "state": "all" })
+        self.__pullRequests = self.__clienteGithub.getPaginadoCursor(f"repos/{self.__repositorio}/pulls",
+                                           opts=MinerarOpcoes(sleepTime, "Buscando PRs do repositório...", "ciano"),
+                                           params={ "state": "all" },
+                                           obrigatorio=True)
 
     def __buscarIssues(self, sleepTime: float) -> None:
-        self.__issues = self.__minerar(f"repos/{self.repositorio}/issues", 
-                                     MinerarOpcoes(sleepTime, "Buscando issues do repositório...", "azul"),
-                                     params={ "state": "all" })
+        self.__issues = self.__clienteGithub.getPaginadoCursor(f"repos/{self.__repositorio}/issues", 
+                                     opts=MinerarOpcoes(sleepTime, "Buscando issues do repositório...", "azul"),
+                                     params={ "state": "all" },
+                                     obrigatorio=True)
 
     def __definirAutoresIssuesPRs(self) -> None:
         self.__autoresIssuesPRs = dict()
         for issue in self.__issues:
+            if issue.get("user") is None: continue
             self.__autoresIssuesPRs[str(issue['number'])] = issue['user']['login']
 
         for pr in self.__pullRequests:
+            if pr.get("user") is None: continue
             self.__autoresIssuesPRs[str(pr['number'])] = pr['user']['login']
 
+    # Funções de mineração
+    # Usam o ClienteGithub para fazer todas as requests
+    # depois de conseguir os dados jogam para as funções de processamento
+    # lá os dados são tratados para virar interações
     def __minerarComentariosIssuesPR(self, sleepTime) -> None:
-        comentarios = self.__minerar(f"repos/{self.repositorio}/issues/comments", 
-                                   MinerarOpcoes(sleepTime, "Buscando comentários das issues...", "amarelo"))
-
-        for comentario in comentarios:
-            autorDoComentario = comentario["user"]["login"]
-            numeroDaIssue = comentario['issue_url'].split('issues/')[1]
-
-            # Comentário em issue fantasma
-            if not numeroDaIssue in self.__autoresIssuesPRs:
-                continue
-
-            autorDaIssue = self.__autoresIssuesPRs[numeroDaIssue]
-            # caso o comentário seja do autor (seria um loop)
-            if (autorDoComentario == autorDaIssue):
-                continue
-
-            # registra os envolvidos
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
-            self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
-
-            # registra a interação
-            i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentario_issue")
-            self.__addInteraction(i)
+        endpoint = f"repos/{self.__repositorio}/issues/comments"
+        resultado = self.__clienteGithub.getPaginado(endpoint, 
+                                   opts=MinerarOpcoes(sleepTime, "Buscando comentários das issues...", "amarelo"))
+        for pagina in resultado.paginasComFalha:
+            self.__adicionarPendencia(RequestPendente(endpoint, "comentarios_issues", pagina=pagina))
+        for comentario in resultado.itens:
+            self.__processarComentarioIssue(comentario)   
 
     def __minerarComentariosInlinePullRequest(self, sleepTime) -> None:
-        comentarios = self.__minerar(f"repos/{self.repositorio}/pulls/comments", 
-                                   MinerarOpcoes(sleepTime, "Buscando comentários dos pull requests...", "azul"))
+        endpoint = f"repos/{self.__repositorio}/pulls/comments"
+        resultado = self.__clienteGithub.getPaginado(endpoint, 
+                                   opts=MinerarOpcoes(sleepTime, "Buscando comentários dos pull requests...", "azul"))
+        for pagina in resultado.paginasComFalha:
+            self.__adicionarPendencia(RequestPendente(endpoint, "comentarios_prs", pagina=pagina))
+        for comentario in resultado.itens:
+            self.__processarComentarioInlinePR(comentario)
+            
+    def __minerarMergeDeUmPR(self, numeroPR: int, autorPR: str):
+        endpoint = f"repos/{self.__repositorio}/pulls/{numeroPR}"
+        pull = self.__clienteGithub.get(endpoint, opts=MinerarOpcoes(desc=f"Buscando merge #{numeroPR}...", cor='verde'))
+        time.sleep(0.5)
+        if pull is None:
+            self.__adicionarPendencia(RequestPendente(endpoint, 'merge', autorPR=autorPR, numeroPR=numeroPR))
+            return               
+        self.__processarMerge(pull, autorPR)
 
-        for comentario in comentarios:
-            autorDoComentario = comentario["user"]["login"]
+    def __minerarReviewsDeUmPR(self, numeroPR: int, autorPR: str):
+        endpoint = f"repos/{self.__repositorio}/pulls/{numeroPR}/reviews"
+        resultado = self.__clienteGithub.getPaginado(endpoint, 
+                        opts=MinerarOpcoes(0.5, f"Buscando reviews do pull {numeroPR}...", cor="ciano"))
+        self.__mapaUsuarios.buscarOuRegistrar(autorPR)
+        if len(resultado.paginasComFalha) > 0:
+            self.__adicionarPendencia(RequestPendente(endpoint, "reviews", autorPR=autorPR, numeroPR=numeroPR))
+            # não processa as páginas, refaz aquele PR depois
+            return
+        for review in resultado.itens:
+            self.__processarReview(review, autorPR)
+        time.sleep(0.5)
 
-            # Comentário em PR fantasma
-            if not comentario["pull_request_url"].split("pulls/")[1] in self.__autoresIssuesPRs:
-                continue
-
-            autorDoPullRequest = self.__autoresIssuesPRs[comentario['pull_request_url'].split('pulls/')[1]]
-
-            # caso o comentário seja do autor (seria um loop)
-            if autorDoComentario == autorDoPullRequest:
-                continue
-
-            # registra os envolvidos
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
-
-            # registra a interação
-            i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentario_pull_request")
-            self.__addInteraction(i)
-
-    def __minerarFechamentoIssues(self) -> None:
+    # Não faz requests, apenas roda pelas issues e mapeia
+    def __processarFechamentoIssues(self) -> None:
         for issue in self.__issues:
-            if not issue["closed_by"] or issue.get("pull_request"):
-                continue;
+            if not issue.get("closed_by") or issue.get("pull_request") or issue.get('user') is None:
+                continue
 
             quemFez = issue["closed_by"]["login"]
             autorDaIssue = issue["user"]["login"]
@@ -352,92 +308,122 @@ class Minerador:
 
             # registra a interação
             i = Interacao(quemFez, autorDaIssue, self.PESOS["fechamento_issue"], "fechamento_issue")
-            self.__addInteraction(i)
+            self.__adicionarInteracao(i)
 
+    # Processadores
+    # Responsáveis por converter dados em interações
+    def __processarComentarioIssue(self, comentario: dict):
+        # proteger de comentários fantasma
+        if comentario.get("user") is None: return
 
-    def __minerarRevisoesPullRequests(self) -> None:
-        # dividir o array de prs em 4 subarrays
-        qntd = len(self.__pullRequests)
-        qntdPorGrupo, sobra = divmod(qntd, 4)
-        chunks = []
-        inicio = 0
-        for i in range(4):
-            fim = inicio + qntdPorGrupo + (1 if i < sobra else 0) # ternário para que caso seja um grupo que tem a mais adicionar 1 item
-            chunks.append([ {"num": pr['number'], "autorDoPull": pr['user']['login']} for pr in self.__pullRequests[inicio:fim] ])
-            inicio = fim
+        autorDoComentario = comentario["user"]["login"]
+        numeroDaIssue = comentario['issue_url'].split('issues/')[1]
+        autorDaIssue = self.__autoresIssuesPRs.get(numeroDaIssue)
 
-        # cria as threads
-        threads = []
-        for chunk in chunks:
-            thread = Thread(target=self.__processarMergeOrReviewChunk, args=("review", chunk, "ciano",)) # precisa da , no final para tratar como tupla
-            thread.start()
-            threads.append(thread)
+        # Comentário em issue fantasma
+        if autorDaIssue is None:
+            return
 
-        # espera as 4 threads acabarem
-        for thread in threads:
-            thread.join()
+        # caso o comentário seja do autor (seria um loop)
+        if (autorDoComentario == autorDaIssue):
+            return
 
-    def __minerarMergePullRequests(self) -> None:
-        merges = []
-        for pull in self.__pullRequests:
-            if not pull.get("merged_at"):
-                continue
-            autorDoPull = pull["user"]["login"]
-            self.__mapaUsuarios.buscarOuRegistrar(autorDoPull)
-            merges.append({"autorDoPull": autorDoPull, "num": pull["number"]})
+        # registra os envolvidos
+        self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
+        self.__mapaUsuarios.buscarOuRegistrar(autorDaIssue)
 
-        # dividir o array de merges em 4 subarrays
-        qntd = len(merges)
-        qntdPorGrupo, sobra = divmod(qntd, 4)
-        chunks = []
-        inicio = 0
-        for i in range(4):
-            fim = inicio + qntdPorGrupo + (1 if i < sobra else 0) # ternário para que caso seja um grupo que tem a mais adicionar 1 item
-            chunks.append(merges[inicio:fim])
-            inicio = fim
+        # registra a interação
+        i = Interacao(autorDoComentario, autorDaIssue, self.PESOS["comentario_issue"], "comentario_issue")
+        self.__adicionarInteracao(i)
 
-        # cria as threads
-        threads = []
-        for chunk in chunks:
-            thread = Thread(target=self.__processarMergeOrReviewChunk, args=("merge", chunk, "verde")) # precisa da , para tratar como tupla
-            thread.start()
-            threads.append(thread)
+    def __processarComentarioInlinePR(self, comentario: dict):
+        # proteger de comentários fantasma
+        if comentario.get("user") is None: return
 
-        # espera as 4 threads acabarem
-        for thread in threads:
-            thread.join()
+        autorDoComentario = comentario["user"]["login"]
+        autorDoPullRequest = self.__autoresIssuesPRs.get(comentario['pull_request_url'].split('pulls/')[1])
 
-    # chunk = array com números & autores de pull requests
-    def __processarMergeOrReviewChunk(self, tipo: str, chunk, cor: Cor):
-        headers = self.__getHeader()
-        for i in range(len(chunk)):
-            if (tipo == 'merge'):
-                self.__aumentarContadorRequest()
-                print(f"{CORES[cor]}Buscando merge #{chunk[i]['num']}...{RESET}")
-                req = requests.get(f"{self.urlBase}/repos/{self.repositorio}/pulls/{chunk[i]['num']}", headers=headers)
-                req.raise_for_status()
-                pull = req.json()
-                time.sleep(0.5)
-                if not pull['merged_by'] or pull['merged_by']['login'] ==  chunk[i]['autorDoPull']:
-                    continue
-                self.__mapaUsuarios.buscarOuRegistrar(pull['merged_by']['login'])
-                interacao = Interacao(pull['merged_by']['login'], chunk[i]['autorDoPull'], self.PESOS['merge_pull'], "merge_pull")
-                self.__addInteraction(interacao)
-                continue
+        # Comentário em PR fantasma
+        if autorDoPullRequest is None:
+            return
 
-            reviews = self.__minerar(f"repos/{self.repositorio}/pulls/{chunk[i]['num']}/reviews", 
-                                   MinerarOpcoes(0.5, f"Buscando reviews do pull {chunk[i]['num']}...", cor, headers))
-            self.__mapaUsuarios.buscarOuRegistrar(chunk[i]["autorDoPull"])
-            for revisao in reviews:
-                if not revisao.get("user") or revisao["user"]["login"] == chunk[i]["autorDoPull"]:  # pula revisões sem usuário & verifica loops
-                    continue
-                # registra o autor
-                self.__mapaUsuarios.buscarOuRegistrar(revisao["user"]["login"])
-                # registra a interação
-                interacao = Interacao(revisao["user"]["login"], chunk[i]['autorDoPull'], self.PESOS["revisao_pull"], "revisao_pull")
-                self.__addInteraction(interacao)
-            time.sleep(0.5)
-    
+        # caso o comentário seja do autor (seria um loop)
+        if autorDoComentario == autorDoPullRequest:
+            return
+
+        # registra os envolvidos
+        self.__mapaUsuarios.buscarOuRegistrar(autorDoComentario)
+        self.__mapaUsuarios.buscarOuRegistrar(autorDoPullRequest)
+
+        # registra a interação
+        i = Interacao(autorDoComentario, autorDoPullRequest, self.PESOS["comentario_pull_request"], "comentario_pull_request")
+        self.__adicionarInteracao(i)
+
+    def __processarReview(self, review: dict, autorPR):
+        if not review.get("user") or review["user"]["login"] == autorPR:  # pula revisões sem usuário & verifica loops
+            return
+        # registra o autor
+        self.__mapaUsuarios.buscarOuRegistrar(review["user"]["login"])
+        # registra a interação
+        interacao = Interacao(review["user"]["login"], autorPR, self.PESOS["revisao_pull"], "revisao_pull")
+        self.__adicionarInteracao(interacao)
+
+    def __processarMerge(self, pull: dict, autorPR):
+        if not pull.get('merged_by') or pull['merged_by']['login'] == autorPR: # pula merges sem usuário & verifica loops
+            return
+        # registra quem fez o merge
+        self.__mapaUsuarios.buscarOuRegistrar(pull['merged_by']['login'])
+        # registra a interação
+        interacao = Interacao(pull['merged_by']['login'], autorPR, self.PESOS['merge_pull'], "merge_pull")
+        self.__adicionarInteracao(interacao)
+
+    # Processa as requests que ficaram pendentes
+    def __processarPendencias(self, sleepTime: float):
+        # array para caso ainda sobrem pendências
+        # não serão processadas, já houveram muitos retries para ela
+        # sendo assim, ocorre uma rodada, quem falhar novamente vira aviso
+        novasPendencias = []
+        for pendencia in self.__requestsPendentes:
+            # garante o fluxo adequado para cada pendência
+            match pendencia.tipo:
+                case "reviews":
+                    resultado = self.__clienteGithub.getPaginado(pendencia.endpoint, opts=MinerarOpcoes(0.5, f"Buscando reviews do pull {pendencia.numeroPR}...", cor="ciano"))
+                    if len(resultado.paginasComFalha) > 0:
+                        novasPendencias.append(pendencia)
+                        continue
+                    for review in resultado.itens:
+                        self.__processarReview(review, pendencia.autorPR)
+                case "merge":
+                    resultado = self.__clienteGithub.get(pendencia.endpoint, opts=MinerarOpcoes(desc=f"Buscando merge #{pendencia.numeroPR}...", cor='verde'))
+                    if resultado is None:
+                        novasPendencias.append(pendencia)
+                        continue
+                    self.__processarMerge(resultado, pendencia.autorPR)
+                case "comentarios_issues":
+                    resultado = self.__clienteGithub.get(
+                        pendencia.endpoint, 
+                        params={"page": pendencia.pagina, "per_page": 100},
+                        opts=MinerarOpcoes(desc="Buscando comentários das issues...", cor="amarelo"))
+                    if resultado is None:
+                        novasPendencias.append(pendencia)
+                        continue
+                    for comentario in resultado:
+                        self.__processarComentarioIssue(comentario)
+                case "comentarios_prs":
+                    resultado = self.__clienteGithub.get(
+                        pendencia.endpoint, 
+                        params={"page": pendencia.pagina, "per_page": 100},
+                        opts=MinerarOpcoes(desc="Buscando comentários dos pull requests...", cor="azul"))
+                    if resultado is None:
+                        novasPendencias.append(pendencia)
+                        continue
+                    for comentario in resultado:
+                        self.__processarComentarioInlinePR(comentario)
+            time.sleep(sleepTime)
+        # Atualiza o array final
+        self.__requestsPendentes = novasPendencias
+
+    # Exporta dados que serão utilizados pelo builder
     def exportarDados(self) -> dict | None:
         if (self.__mapaUsuarios.quantidadeDeUsuarios() <= 0 or len(self.__mapaInteracoes) <= 0):
             return None
@@ -446,8 +432,8 @@ class Minerador:
             "usuarios": self.__mapaUsuarios.exportarUsuarios(),
             "interacoes": [
                 {
-                    "origem": interacao.quemFez,
-                    "destino": interacao.alvo,
+                    "origem": interacao.origem,
+                    "destino": interacao.destino,
                     "peso": interacao.peso,
                     "tipo": interacao.tipo,
                 }
