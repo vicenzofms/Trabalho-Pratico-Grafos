@@ -4,11 +4,15 @@ from trabalho_pratico_grafos.grafos.grafo_abstrato import GrafoAbstrato
 
 
 def pontes_locais(grafo: GrafoAbstrato) -> list[tuple[int, int]]:
-    """Retorna uma lista de pares não-direcionados (u, v) na convenção u < v"""
-    # ou seja, caso exista a ligação u-v, independente se no grafo original
+    """
+    Atua sobre o grafo subjacente
+    Encontra arestas tal que, existe uma ligação entre u e v, e eles não possuem
+    vizinhos em comum, o único atalho entre os dois mundos é a aresta não direcionada u-v
+    ---
+    Retorna uma lista de pares não-direcionados (u, v) na convenção u < v
+    """
+    # caso exista a ligação u-v, independente se no grafo original
     # a representação é u->v ou v->u ou as duas em anti-paralelas
-    # apenas nos importa que, existe uma ligação entre u e v, e eles não possuem
-    # vizinhos em comum, o único atalho entre os dois mundos é u-v
     # remover essa ligação não necessariamente desconecta o grafo (ponte clássica)
     # apenas faz a distância entre u e v ir de 1 para > 2, já que não há caminho de tamanho 2 (via vizinho compartilhado)
     subjacente = _construir_grafo_subjacente(grafo)
@@ -27,7 +31,11 @@ def pontes_locais(grafo: GrafoAbstrato) -> list[tuple[int, int]]:
     return pontes
 
 def arestas_intercomunidade(grafo: GrafoAbstrato, particao: list[int]) -> list[tuple[int, int]]:
-    """Retorna uma lista de pares DIRECIONADOS (u, v), onde a aresta u->v tem extremos em comunidades distintas"""
+    """
+    Encontra arestas que tem extremos em comunidades diferentes
+    ---
+    Retorna uma lista de pares DIRECIONADOS (u, v), ou seja, arestas u->v
+    """
     # Lembrete: particao[i] retorna a comunidade em que o vértice i está localizado
     # a função não roda louvain, seria muito caro além de fixar a resposta para um grafo, dessa forma conseguimos
     # tratar qualquer configuração de comunidades, independente se tem a modularidade maximizada
@@ -43,7 +51,11 @@ def arestas_intercomunidade(grafo: GrafoAbstrato, particao: list[int]) -> list[t
     return arestas
 
 def pontes_classicas(grafo: GrafoAbstrato) -> list[tuple[int, int]]:
-    """Retorna uma lista de pares não-direcionados (u, v) na convenção u < v"""
+    """
+    Encontra pontes clássicas, que se removidas, desconectam o grafo
+    ---
+    Retorna uma lista de pares não-direcionados (u, v) na convenção u < v
+    """
     # Utiliza uma DFS, porém não implementada de maneira recursiva, devido a grafos que podem ser muito profundos e estourar
     # o limite de recursão do Python, ao implementar a pilha manualmente não temos essa limitação de RecursionError
     subjacente = _construir_grafo_subjacente(grafo)
@@ -71,7 +83,7 @@ def pontes_classicas(grafo: GrafoAbstrato) -> list[tuple[int, int]]:
         # adiciona o vértice para ser processado
         pilha = [(u, -1, iter(subjacente[u].keys()))]
 
-        # até esgota a pilha
+        # até esgotar a pilha
         # cada iteração é um passo de trabalho no vértice do topo
         while len(pilha) > 0:
             # desconstrói o topo da pilha

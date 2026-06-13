@@ -1,6 +1,5 @@
 from collections import defaultdict
 from trabalho_pratico_grafos.grafos import GrafoAbstrato
-# OH MY GOD, que trem doido
 
 def _construir_grafo_subjacente(grafo: GrafoAbstrato):
     subjacente = {i: {} for i in range(grafo.getQuantidadeVertices())}
@@ -23,7 +22,11 @@ def _grausPonderados(subjacente: dict):
         for i in subjacente
     }
 
-def modularidade(grafo: GrafoAbstrato, particao: list[int]):
+def modularidade(grafo: GrafoAbstrato, particao: list[int]) -> float:
+    """
+    Encontra a modularidade para uma determinada configuração de
+    comunidades para um grafo
+    """
     subjacente = _construir_grafo_subjacente(grafo)
     return _modularidadePeloSubjacente(subjacente, particao)
 
@@ -55,6 +58,10 @@ def _modularidadePeloSubjacente(subjacente: dict, particao: list[int]):
     ])
     
 def louvain(grafo: GrafoAbstrato) -> list[int]:
+    """
+    Heurística para encontrar uma configuração de comunidades que maximiza
+    a modularidade do grafo
+    """
     # cada vértice começa isolado em sua própria comunidade
     subjacente = _construir_grafo_subjacente(grafo)
     comunidades = [u for u in range(len(subjacente))]
