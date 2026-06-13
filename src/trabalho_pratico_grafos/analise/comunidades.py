@@ -28,9 +28,9 @@ def modularidade(grafo: GrafoAbstrato, particao: list[int]) -> float:
     comunidades para um grafo
     ---
     O retorno Q da modularidade de Newman varia entre -0.5 <= Q < 1:
-    -0.5: Divisão pior que o acaso, todas as arestas entre comunidadades
+    -0.5: Divisão pior que o acaso, todas as arestas entre comunidades
     1: Quanto mais próximo mais forte a estrutura de comunidades (muitas internas, poucas intercomunidades)
-    No interalo entre ~0.3 e ~0.7 indica uma estrutura de comunidades significativa
+    No intervalo entre ~0.3 e ~0.7 indica uma estrutura de comunidades significativa
     """
     subjacente = _construir_grafo_subjacente(grafo)
     return _modularidadePeloSubjacente(subjacente, particao)
