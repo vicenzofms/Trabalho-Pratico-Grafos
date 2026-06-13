@@ -1,5 +1,6 @@
 from collections import defaultdict
 from trabalho_pratico_grafos.grafos import GrafoAbstrato
+# OH MY GOD, que trem doido
 
 def _construir_grafo_subjacente(grafo: GrafoAbstrato):
     subjacente = {i: {} for i in range(grafo.getQuantidadeVertices())}
@@ -53,7 +54,7 @@ def _modularidadePeloSubjacente(subjacente: dict, particao: list[int]):
         for comunidade in list(dict.fromkeys(particao))
     ])
     
-def louvain(grafo: GrafoAbstrato) -> list[int]: 
+def louvain(grafo: GrafoAbstrato) -> list[int]:
     # cada vértice começa isolado em sua própria comunidade
     subjacente = _construir_grafo_subjacente(grafo)
     comunidades = [u for u in range(len(subjacente))]

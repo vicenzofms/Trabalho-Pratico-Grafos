@@ -1,5 +1,7 @@
 from typing import Literal
 
+#Utilitário bobo O_o
+
 Cor = Literal["nenhuma","vermelho", "verde", "amarelo", "azul", "roxo", "ciano"]
 
 CORES: dict[Cor, str] = {
