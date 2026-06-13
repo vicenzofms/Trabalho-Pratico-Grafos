@@ -87,7 +87,7 @@ class Minerador:
                     quem, alvo, tipo = eval(chave)  # reconstrói a tupla
                     self.__mapaUsuarios.buscarOuRegistrar(quem)
                     self.__mapaUsuarios.buscarOuRegistrar(alvo)
-                    self.__mapaInteracoes[(quem, alvo, tipo)] = Interacao(**interacao)
+                    self.__mapaInteracoes[(quem, alvo, tipo)] = Interacao(origem=quem, destino=alvo, tipo=tipo, peso=interacao["peso"])
                 self.__contadorInteracoesRegistradas = len(self.__mapaInteracoes)
             print(colorir(f"Cache carregado de {caminho}", "roxo"))
             return True
