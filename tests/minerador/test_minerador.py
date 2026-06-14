@@ -1,7 +1,9 @@
+import os
+
 import pytest
 
 from trabalho_pratico_grafos.minerador.minerador import Interacao, Minerador, RequestPendente
-from trabalho_pratico_grafos.minerador.cliente_github import ResultadoPaginado
+from trabalho_pratico_grafos.minerador.cliente_github import ResultadoPaginado, ErroTokensInutilizaveis
 
 # Para rodar escrever no terminal na raiz do projeto: pytest -v
 
@@ -703,4 +705,46 @@ def test_executar_usa_cache_e_retorna_cedo(tmp_path):
     # Assert: os dados vieram do cache, sem nenhuma request
     assert minerador.quantidadeInteracoes() == 1
     assert minerador._Minerador__mapaInteracoes[("bob", "ana", "merge_pull")].peso == 5
+
+
+# Cliente que passa na verificação do repo e nas listagens, mas esgota os tokens
+# (ErroTokensInutilizaveis) em qualquer mineração específica (comentários/merges).
+class ClienteTokensEsgotam:
+    def __init__(self, issues, pulls):
+        self.__issues = issues
+        self.__pulls = pulls
+
+    def get(self, endpoint, params=None, obrigatorio=False, opts=None):
+        # "repos/dono/repo" (verificação do repo) passa; o resto (merge) esgota
+        if endpoint.count("/") == 2:
+            return {"full_name": endpoint}
+        raise ErroTokensInutilizaveis("tokens esgotados (fake)")
+
+    def getPaginadoCursor(self, endpoint, params=None, opts=None, obrigatorio=False):
+        if endpoint.endswith("/issues"): return self.__issues
+        if endpoint.endswith("/pulls"): return self.__pulls
+        return []
+
+    def getPaginado(self, endpoint, params=None, opts=None, obrigatorio=False):
+        raise ErroTokensInutilizaveis("tokens esgotados (fake)")
+
+    def getQuantidadeRequests(self):
+        return 0
+
+def test_executar_aborta_e_preserva_parciais_quando_tokens_esgotam(tmp_path):
+    # Arrange: o fechamento de issue é processado sem rede, então fica registrado
+    # antes de os tokens esgotarem na mineração de comentários.
+    caminho = str(tmp_path / "cache.json")
+    minerador = Minerador("dono/repo", ["token_exemplo"], usar_cache=True)
+    minerador._Minerador__obterCaminhoCache = lambda: caminho
+    issues = [{"number": 1, "user": {"login": "ana"}, "closed_by": {"login": "bob"}}]
+    minerador._Minerador__clienteGithub = ClienteTokensEsgotam(issues, [])
+
+    # Act: executar não pode levantar exceção, deve abortar de forma limpa
+    minerador.executar(sleepTime=0)
+
+    # Assert: a interação de fechamento foi preservada apesar do aborto e persistida no cache
+    assert minerador.quantidadeInteracoes() == 1
+    assert minerador._Minerador__mapaInteracoes[("bob", "ana", "fechamento_issue")].peso == 1
+    assert os.path.exists(caminho)
 # Fim dos testes em executar()

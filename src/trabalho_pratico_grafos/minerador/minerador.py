@@ -6,7 +6,7 @@ import json
 import time
 import os
 
-from trabalho_pratico_grafos.minerador.cliente_github import ClienteGithub, ErroRequestObrigatoria, MinerarOpcoes
+from trabalho_pratico_grafos.minerador.cliente_github import ClienteGithub, ErroRequestObrigatoria, ErroTokensInutilizaveis, MinerarOpcoes
 from trabalho_pratico_grafos.minerador.cores import colorir
 from trabalho_pratico_grafos.minerador.mapa_usuarios import MapaUsuarios
 
@@ -120,7 +120,8 @@ class Minerador:
         # Verificar disponibilidade do repo
         try:
             self.__clienteGithub.get(f"repos/{self.__repositorio}", obrigatorio=True, opts=MinerarOpcoes(desc="Verificando repositório...", cor="roxo"))
-        except ErroRequestObrigatoria as e:
+        except (ErroRequestObrigatoria, ErroTokensInutilizaveis) as e:
+            # falha obrigatória ou tokens inutilizáveis logo no começo: ainda não há dados a salvar
             print(f"Erro ao acessar o repositório '{self.__repositorio}': {e}")
             return
 
@@ -132,8 +133,8 @@ class Minerador:
                 futurePulls = executor.submit(self.__buscarPullRequests, sleepTime)
                 futureIssues.result()
                 futurePulls.result()
-        except ErroRequestObrigatoria as e:
-            # Alguma falhou e elas são obrigatórias, encerrando cedo...
+        except (ErroRequestObrigatoria, ErroTokensInutilizaveis) as e:
+            # listagem obrigatória falhou ou os tokens se esgotaram; ainda sem interações coletadas
             print(f"Mineração Encerrada com Erro: {e}")
             return
 
@@ -142,6 +143,9 @@ class Minerador:
 
         # informações específicas
         # aqui vamos ter mais uma pool de threads, porém com 8 para dividir todo o resto
+        # se os tokens ficarem inutilizáveis no meio (ErroTokensInutilizaveis), abortamos a coleta
+        # mas preservamos tudo que já foi registrado em __mapaInteracoes
+        abortado = False
         with ThreadPoolExecutor(max_workers=8) as executor:
             futuros: dict[Future, str] = {}
             # Comentários são paginados
@@ -158,27 +162,34 @@ class Minerador:
                 # e caso ele tenha sido mergeado, crio uma chamada para olhar o merge
                 if pr.get("merged_at"):
                     futuros[executor.submit(self.__minerarMergeDeUmPR, numeroPR, autorPR)] = f"Minerando merge do PR #{numeroPR}"
-            # Agora espera elas, em caso de erro avisa e continua as outras
+            # Agora espera elas; falha pontual vira aviso e segue, mas tokens inutilizáveis abortam tudo
             for future, desc in futuros.items():
                 try:
                     future.result()
+                except ErroTokensInutilizaveis as e:
+                    # condição terminal: sem tokens utilizáveis não adianta continuar
+                    print(colorir(f"[ABORTADO]: {e} Preservando dados parciais...", 'vermelho'))
+                    abortado = True
+                    break
                 except Exception as e:
                     print(f"Ocorreu um erro em \"{desc}\": {type(e).__name__} {e}")
 
         tempoTotal = time.time() - inicio # salva tempo final antes de responder
-        if len(self.__requestsPendentes) > 0:
+        # só tenta reprocessar pendências se a coleta não foi abortada por tokens inutilizáveis
+        if not abortado and len(self.__requestsPendentes) > 0:
             print(f"Existem {len(self.__requestsPendentes)} requests que não foram concluídas")
-            # Costura 5: antes pedia confirmação via input() (trava num servidor, sem
-            # terminal). Agora o reprocessamento é controlado pelo parâmetro
-            # `reprocessar_pendencias` (default True faz uma única passada de retry).
             if reprocessar_pendencias:
                 inicio2 = time.time()
-                self.__processarPendencias(sleepTime)
+                try:
+                    self.__processarPendencias(sleepTime)
+                except ErroTokensInutilizaveis as e:
+                    # tokens se esgotaram durante o retry: aborta, mas mantém o já coletado
+                    print(colorir(f"[ABORTADO]: {e} Preservando dados parciais...", 'vermelho'))
                 tempoTotal += (time.time() - inicio2)
-        if len(self.__requestsPendentes) > 0: # após reprocessar ainda há pendências
+        if len(self.__requestsPendentes) > 0: # após reprocessar (ou abortar) ainda há pendências
             print(colorir("[AVISO]: não foi possível completar todas as requests, EXISTEM dados parciais", 'vermelho'))
 
-        # ao terminar se for para salvar cache é salvo
+        # ao terminar — ou ao abortar por tokens inutilizáveis — salva o que foi coletado
         if self.usar_cache:
             self.salvarNoCache()
 

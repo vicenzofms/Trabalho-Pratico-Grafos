@@ -74,6 +74,9 @@ Getters e setters, que validam os índices antes de operar:
 - `setPesoVertice(u, peso)` e `getPesoVertice(u)`: peso de um vértice.
 - `setRotuloVertice(u, rotulo)` e `getRotuloVertice(u)`: rótulo (o username) de
   um vértice.
+- `getVerticePorRotulo(rotulo)`: busca reversa, devolve o índice do primeiro
+  vértice com aquele rótulo, ou `None` se nenhum o tiver. Como os vértices nascem
+  com rótulo vazio, consultar `""` devolve o primeiro vértice ainda sem rótulo.
 - `getGrauEntrada(u)` e `getGrauSaida(u)`: graus de entrada e saída.
 - `getQuantidadeVertices()` e `getQuantidadeArestas()`: cardinalidades.
 

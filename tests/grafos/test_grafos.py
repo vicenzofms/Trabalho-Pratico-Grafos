@@ -333,6 +333,60 @@ def test_rotulo_vertice_indice_invalido_levanta_erro(Grafo):
 # Fim dos testes em getRotuloVertice() e setRotuloVertice()
 
 
+# Inicio dos testes em getVerticePorRotulo()
+def test_getVerticePorRotulo_encontra_o_indice(Grafo):
+    # Arrange: rótulos distintos em alguns vértices
+    grafo = Grafo(3)
+    grafo.setRotuloVertice(0, "ana")
+    grafo.setRotuloVertice(2, "bob")
+
+    # Act and Assert: devolve o índice do vértice com aquele rótulo
+    assert grafo.getVerticePorRotulo("ana") == 0
+    assert grafo.getVerticePorRotulo("bob") == 2
+
+
+def test_getVerticePorRotulo_rotulo_inexistente_retorna_none(Grafo):
+    # Arrange
+    grafo = Grafo(3)
+    grafo.setRotuloVertice(0, "ana")
+
+    # Act and Assert: rótulo que ninguém tem devolve None
+    assert grafo.getVerticePorRotulo("carla") is None
+
+
+def test_getVerticePorRotulo_inverso_de_getRotuloVertice(Grafo):
+    # Arrange: o índice encontrado deve bater com getRotuloVertice (ida e volta)
+    grafo = Grafo(4)
+    grafo.setRotuloVertice(1, "ana")
+
+    # Act
+    indice = grafo.getVerticePorRotulo("ana")
+
+    # Assert
+    assert indice == 1
+    assert grafo.getRotuloVertice(indice) == "ana"
+
+
+def test_getVerticePorRotulo_duplicado_devolve_o_primeiro(Grafo):
+    # Arrange: dois vértices com o mesmo rótulo
+    grafo = Grafo(3)
+    grafo.setRotuloVertice(1, "ana")
+    grafo.setRotuloVertice(2, "ana")
+
+    # Act and Assert: retorna o de menor índice
+    assert grafo.getVerticePorRotulo("ana") == 1
+
+
+def test_getVerticePorRotulo_rotulo_vazio_acha_o_primeiro_sem_rotulo(Grafo):
+    # Arrange: vértices nascem com rótulo "" por padrão
+    grafo = Grafo(3)
+    grafo.setRotuloVertice(0, "ana")
+
+    # Act and Assert: consultar "" devolve o primeiro vértice ainda sem rótulo
+    assert grafo.getVerticePorRotulo("") == 1
+# Fim dos testes em getVerticePorRotulo()
+
+
 # Inicio dos testes em setPesoAresta()
 def test_setPesoAresta_atualiza_o_peso(Grafo):
     # Arrange

@@ -40,10 +40,13 @@ Contém a classe principal e as estruturas de dados das interações.
   - `__init__(repositorio, tokens, usar_cache)`: inicializa o cliente do
     GitHub, o mapa de usuários, o mapa de interações e os locks de
     concorrência. Lança erro se a lista de tokens estiver vazia.
-  - `executar(sleepTime)`: ponto de entrada da mineração. Tenta o cache primeiro
-    (se habilitado), verifica se o repositório existe, busca issues e PRs em
-    paralelo, dispara a coleta de comentários, fechamentos, revisões e merges, e
-    ao final oferece reprocessar pendências e salvar o cache.
+  - `executar(sleepTime, reprocessar_pendencias)`: ponto de entrada da
+    mineração. Tenta o cache primeiro (se habilitado), verifica se o repositório
+    existe, busca issues e PRs em paralelo, dispara a coleta de comentários,
+    fechamentos, revisões e merges, e ao final reprocessa as pendências e salva o
+    cache. Se os tokens ficarem inutilizáveis no meio da coleta
+    (`ErroTokensInutilizaveis`), aborta de forma limpa e preserva tudo que já foi
+    registrado, salvando o resultado parcial no cache em vez de perdê-lo.
   - `carregarDoCache()` e `salvarNoCache()`: leem e gravam o mapa de interações
     em `data/<owner>_<repo>.json`. Retornam ao estado anterior sem quebrar caso o
     arquivo não exista ou esteja corrompido.
@@ -96,6 +99,10 @@ Isola todo o acesso HTTP à API do GitHub.
   de usos, se está inválido e até quando está bloqueado por rate limit.
 - **`ErroRequestObrigatoria`** (exceção): levantada quando uma requisição
   marcada como obrigatória falha, abortando a mineração.
+- **`ErroTokensInutilizaveis`** (exceção): levantada quando não há mais nenhum
+  token utilizável, seja porque todos ficaram inválidos, seja porque todos estão
+  em rate limit com espera superior a quinze minutos. Sinaliza ao minerador que
+  deve abortar a coleta.
 - **`ClienteGithub`**: principais métodos:
   - `get(endpoint, ...)`: faz uma única requisição e devolve o JSON, ou `None` em
     caso de falha não obrigatória.
@@ -110,7 +117,9 @@ Isola todo o acesso HTTP à API do GitHub.
     inválido, rate limit, limite de paginação e erros de rede com novas
     tentativas).
   - `__getToken()`: seleciona o token válido menos usado e, se todos estiverem
-    bloqueados, espera o mínimo necessário até um liberar.
+    bloqueados, espera o mínimo necessário até um liberar. Quando não há token
+    utilizável (todos inválidos ou com espera maior que quinze minutos), levanta
+    `ErroTokensInutilizaveis`.
   - `__getHeader(token)`: monta o cabeçalho de autenticação.
   - `__requestFalha(motivo, obrigatorio)`: centraliza o tratamento de falha,
     levantando exceção se a requisição for obrigatória ou apenas avisando caso

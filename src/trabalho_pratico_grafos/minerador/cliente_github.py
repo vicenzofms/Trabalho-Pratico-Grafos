@@ -26,6 +26,9 @@ class TokenEstado:
 class ErroRequestObrigatoria(Exception):
     """Erro em uma request obrigatória! Abortando mineração..."""
 
+class ErroTokensInutilizaveis(Exception):
+    """Nenhum token utilizável: todos inválidos ou em rate limit > 15min. Aborta a mineração."""
+
 class ClienteGithub:
     # Ao falhar em caso de REDE (timeout), são feitas 3 tentativas
     # Ele espera o fator * numeroDaTentativa segundos para a próxima
@@ -165,7 +168,7 @@ class ClienteGithub:
                 # pega o token com a menor quantidade de usos 
                 tokensValidos = list(filter(lambda t: not t.invalido, self.__tokens))
                 if len(tokensValidos) <= 0: # it's over aqui
-                    raise RuntimeError("Todos os tokens estão inválidos!")
+                    raise ErroTokensInutilizaveis("Todos os tokens estão inválidos!")
 
                 # filtra pra achar tokens que não tão bloqueados
                 tokensDisponiveis = list(filter(lambda t: t.bloqueadoAte <= time.time(), tokensValidos))
@@ -182,7 +185,7 @@ class ClienteGithub:
             # precisa esperar fora do lock, por isso o while True, e para tentar novamente após a espera
             tempoDeEspera = proximoReset - time.time() + 3 # folga de 3s
             if tempoDeEspera > 900: # mais de 15 minutos n dá pra esperar
-                raise RuntimeError("Todos os tokens têm tempo de espera > 15min!")
+                raise ErroTokensInutilizaveis("Todos os tokens têm tempo de espera > 15min!")
             if tempoDeEspera > 0: # espera bacana
                 print(f"Tokens em rate-limit. Aguardando {tempoDeEspera:.1f}s...")
                 time.sleep(tempoDeEspera)

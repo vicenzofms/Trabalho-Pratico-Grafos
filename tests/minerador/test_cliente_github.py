@@ -4,7 +4,7 @@ import pytest
 import requests
 
 from trabalho_pratico_grafos.minerador import cliente_github
-from trabalho_pratico_grafos.minerador.cliente_github import ClienteGithub, ErroRequestObrigatoria
+from trabalho_pratico_grafos.minerador.cliente_github import ClienteGithub, ErroRequestObrigatoria, ErroTokensInutilizaveis
 
 # Para rodar escrever no terminal na raiz do projeto: pytest -v
 
@@ -87,13 +87,23 @@ def test_get_401_invalida_token_e_usa_o_proximo(monkeypatch):
     assert fake.chamadas[1]["headers"]["Authorization"] == "Bearer token_b"
     assert cliente._ClienteGithub__tokens[0].invalido is True
 
-def test_get_todos_tokens_invalidos_levanta_runtime_error(monkeypatch):
+def test_get_todos_tokens_invalidos_levanta_erro(monkeypatch):
     # Arrange: token único respondendo 401
     fake = RequestsFake(RespostaFake(401))
     cliente = prepararCliente(monkeypatch, fake, ["token_a"])
 
-    # Act and Assert
-    with pytest.raises(RuntimeError):
+    # Act and Assert: sem token válido, aborta com ErroTokensInutilizaveis
+    with pytest.raises(ErroTokensInutilizaveis):
+        cliente.get("repos/dono/repo")
+
+def test_get_token_bloqueado_acima_de_15min_levanta_erro(monkeypatch):
+    # Arrange: 403 com rate limit zerado e reset a mais de 15 min no futuro (token único)
+    reset = time.time() + 1000  # > 900s
+    fake = RequestsFake(RespostaFake(403, headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(reset)}))
+    cliente = prepararCliente(monkeypatch, fake, ["token_a"])
+
+    # Act and Assert: token bloqueado por tempo > 15min e sem alternativa, aborta
+    with pytest.raises(ErroTokensInutilizaveis):
         cliente.get("repos/dono/repo")
 
 def test_get_403_rate_limit_bloqueia_token_e_usa_o_proximo(monkeypatch):
