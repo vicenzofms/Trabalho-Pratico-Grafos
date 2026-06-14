@@ -1,7 +1,11 @@
 import pytest
 
 from trabalho_pratico_grafos.grafos import GrafoMatrizAdjacencia, GrafoListaAdjacencia
-from trabalho_pratico_grafos.analise.centralidade import centralidade_grau
+from trabalho_pratico_grafos.analise.centralidade import (
+    centralidade_grau,
+    pagerank,
+    centralidade_autovetor,
+)
 
 # Para rodar: pytest tests/analise/test_centralidade.py -v
 #
@@ -132,3 +136,145 @@ def test_grau_independe_da_implementacao_do_grafo(Classe):
 
     assert r["entrada"] == pytest.approx([1.0, 0.0, 0.0, 0.0])
     assert r["saida"] == pytest.approx([0.0, 1 / 3, 1 / 3, 1 / 3])
+
+
+# ---------------------------------------------------------------------------
+# Testes do PageRank (iteração de potência com d = 0.85).
+#
+# Propriedade que vale em QUALQUER grafo: os valores somam 1 (é uma
+# distribuição de probabilidade - a fração do tempo do "navegador aleatório"
+# em cada nó). Os gabaritos exatos foram calculados na mão.
+# ---------------------------------------------------------------------------
+
+
+def _ciclo(n: int, Classe=GrafoMatrizAdjacencia) -> GrafoMatrizAdjacencia:
+    """Ciclo dirigido 0 -> 1 -> ... -> (n-1) -> 0. Totalmente simétrico."""
+    grafo = Classe(n)
+    for u in range(n):
+        grafo.adicionarAresta(u, (u + 1) % n)
+    return grafo
+
+
+def test_pagerank_ciclo_simetrico_todos_iguais():
+    # Num ciclo todos os vértices são equivalentes -> PageRank igual = 1/n.
+    pr = pagerank(_ciclo(3))
+
+    assert pr == pytest.approx([1 / 3, 1 / 3, 1 / 3])
+
+
+def test_pagerank_sempre_soma_um():
+    # A massa total se conserva (incl. com sumidouro) -> Σ PR = 1.
+    assert sum(pagerank(_ciclo(5))) == pytest.approx(1.0)
+    assert sum(pagerank(_completo(4))) == pytest.approx(1.0)
+    assert sum(pagerank(_estrela())) == pytest.approx(1.0)
+
+
+def test_pagerank_dangling_redistribui_a_massa():
+    # 0 -> 1, e o nó 1 é sumidouro (grau de saída 0). Resolvendo o sistema na
+    # mão com d = 0.85: PR[0] = 1/(2 + d) = 1/2.85, PR[1] = 1 - PR[0].
+    # Se a massa do sumidouro não fosse redistribuída, a soma cairia abaixo de 1.
+    grafo = GrafoMatrizAdjacencia(2)
+    grafo.adicionarAresta(0, 1)
+
+    pr = pagerank(grafo)
+
+    assert pr[0] == pytest.approx(1 / 2.85)
+    assert pr[1] == pytest.approx(1 - 1 / 2.85)
+    assert sum(pr) == pytest.approx(1.0)
+
+
+def test_pagerank_quem_recebe_mais_e_mais_central():
+    # A->B, A->C, B->C, C->A. O nó C (2) recebe de dois; B (1) só de A e ainda
+    # dividido (A tem 2 saídas). Então PR[C] > PR[A] > PR[B].
+    grafo = GrafoMatrizAdjacencia(3)
+    for u, v in [(0, 1), (0, 2), (1, 2), (2, 0)]:
+        grafo.adicionarAresta(u, v)
+
+    pr = pagerank(grafo)
+
+    assert pr[2] > pr[0] > pr[1]
+    assert sum(pr) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("Classe", [GrafoMatrizAdjacencia, GrafoListaAdjacencia])
+def test_pagerank_independe_da_implementacao_do_grafo(Classe):
+    # Regra de ouro: matriz e lista de adjacência dão o mesmo resultado.
+    pr = pagerank(_ciclo(3, Classe))
+
+    assert pr == pytest.approx([1 / 3, 1 / 3, 1 / 3])
+
+
+# ---------------------------------------------------------------------------
+# Testes da centralidade de autovetor (iteração de potência + normalização).
+#
+# IMPORTANTE: o autovetor "balança" e não converge em grafos BIPARTIDOS
+# (estrela, ciclos pares) nem em alguns dirigidos. Por isso todas as fixtures
+# aqui são NÃO-bipartidas (têm triângulos) e simétricas, onde o gabarito é
+# limpo. O resultado vem normalizado em L2, então a norma do vetor é ~1.
+# ---------------------------------------------------------------------------
+
+
+def _norma_l2(vetor: list[float]) -> float:
+    return sum(v * v for v in vetor) ** 0.5
+
+
+def _triangulo_bidirecional(Classe=GrafoMatrizAdjacencia) -> GrafoMatrizAdjacencia:
+    """Triângulo 0-1-2 com as duas direções de cada aresta. Não-bipartido."""
+    grafo = Classe(3)
+    for u, v in [(0, 1), (1, 0), (1, 2), (2, 1), (0, 2), (2, 0)]:
+        grafo.adicionarAresta(u, v)
+    return grafo
+
+
+def _dois_triangulos_bidirecional(Classe=GrafoMatrizAdjacencia) -> GrafoMatrizAdjacencia:
+    """Triângulo {0,1,2} + triângulo {2,3,4}, compartilhando o vértice-ponte 2.
+
+    O vértice 2 participa dos dois triângulos, então é o mais central.
+    """
+    grafo = Classe(5)
+    arestas = [(0, 1), (0, 2), (1, 2),  # triângulo da esquerda
+               (2, 3), (2, 4), (3, 4)]  # triângulo da direita
+    for u, v in arestas:
+        grafo.adicionarAresta(u, v)
+        grafo.adicionarAresta(v, u)     # nas duas direções
+    return grafo
+
+
+def test_autovetor_triangulo_simetrico_todos_iguais():
+    # Triângulo é simétrico -> todos têm a mesma importância. Normalizado em L2,
+    # cada um vale 1/raiz(3) ≈ 0.577.
+    x = centralidade_autovetor(_triangulo_bidirecional())
+
+    assert x == pytest.approx([1 / 3 ** 0.5, 1 / 3 ** 0.5, 1 / 3 ** 0.5])
+
+
+def test_autovetor_completo_todos_iguais():
+    # No completo K4 todos são equivalentes -> 1/raiz(4) = 0.5.
+    x = centralidade_autovetor(_completo(4))
+
+    assert x == pytest.approx([0.5, 0.5, 0.5, 0.5])
+
+
+def test_autovetor_resultado_normalizado_em_l2():
+    # A normalização garante que o vetor de saída tem "tamanho" (norma L2) ~1.
+    x = centralidade_autovetor(_dois_triangulos_bidirecional())
+
+    assert _norma_l2(x) == pytest.approx(1.0)
+
+
+def test_autovetor_ponte_e_a_mais_central():
+    # O vértice 2 está nos dois triângulos -> tem que ser o de maior pontuação,
+    # e os outros quatro (simétricos entre si) ficam iguais e menores.
+    x = centralidade_autovetor(_dois_triangulos_bidirecional())
+
+    assert x[2] == max(x)
+    assert x[2] > x[0]
+    assert x[0] == pytest.approx(x[1]) == pytest.approx(x[3]) == pytest.approx(x[4])
+
+
+@pytest.mark.parametrize("Classe", [GrafoMatrizAdjacencia, GrafoListaAdjacencia])
+def test_autovetor_independe_da_implementacao_do_grafo(Classe):
+    # Regra de ouro: matriz e lista de adjacência dão o mesmo resultado.
+    x = centralidade_autovetor(_triangulo_bidirecional(Classe))
+
+    assert x == pytest.approx([1 / 3 ** 0.5, 1 / 3 ** 0.5, 1 / 3 ** 0.5])
