@@ -1,4 +1,5 @@
 from trabalho_pratico_grafos.grafos import GrafoAbstrato
+from trabalho_pratico_grafos.analise.caminhos import bfs_distancias, bfs_brandes
 from math import sqrt
 
 def centralidade_grau(grafo: GrafoAbstrato) -> dict[str, list[float]]:
@@ -120,3 +121,59 @@ def pagerank(grafo: GrafoAbstrato, d = 0.85) -> list[float]:
             break
 
     return PR
+
+
+def centralidade_proximidade(grafo: GrafoAbstrato) -> list[float]:
+    """Quão perto cada vértice está de todos os outros.
+    """
+    n = grafo.getQuantidadeVertices()
+    centralidades = []
+
+    for v in range(n):
+        distancias = bfs_distancias(grafo, v)
+
+        somaDistancias = 0.0
+        alcancaveis = 0
+        for u in range(n):
+            if u != v and distancias[u] != float('inf'):
+                somaDistancias += distancias[u]
+                alcancaveis += 1
+
+        if alcancaveis == 0 or somaDistancias == 0:
+            centralidades.append(0.0)
+        else:
+            # Wasserman-Faust: (fração alcançável) * (closeness clássico sobre alcançáveis)
+            centralidades.append((alcancaveis / (n - 1)) * (alcancaveis / somaDistancias))
+
+    return centralidades
+
+
+def centralidade_intermediacao(grafo: GrafoAbstrato) -> list[float]:
+    """Fração dos caminhos mínimos entre todos os pares (s, t) que passam por cada vértice.
+
+    Vértices com alta intermediação são "brokers": conectam grupos distintos.
+    Usa o algoritmo de Brandes
+    """
+    n = grafo.getQuantidadeVertices()
+    delta = [0.0] * n
+
+    for s in range(n):
+        pilha, predecessores, sigma = bfs_brandes(grafo, s)
+
+        # dep[w]: crédito acumulado de w a partir dos vértices mais distantes
+        dep = [0.0] * n
+
+        # propaga do mais distante para o mais próximo (ordem inversa da BFS)
+        for w in reversed(pilha):
+            for v in predecessores[w]:
+                if sigma[w] > 0:
+                    dep[v] += (sigma[v] / sigma[w]) * (1.0 + dep[w])
+            if w != s:
+                delta[w] += dep[w]
+
+    # normalização para grafo dirigido: cada par (s,t) pode percorrer s→t e t→s
+    if n > 2:
+        fator = 1.0 / ((n - 1) * (n - 2))
+        delta = [d * fator for d in delta]
+
+    return delta
