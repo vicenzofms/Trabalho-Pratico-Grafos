@@ -1,0 +1,196 @@
+<div class="space-y-10">
+
+  <div>
+    <h1 class="font-bold text-2xl">Métricas</h1>
+    @if (repositorio.selecionado(); as sel) {
+      <p class="text-muted text-sm mt-1">{{ sel.owner }}/{{ sel.repo }}</p>
+    }
+  </div>
+
+  @if (analise.isLoading()) {
+    <div class="space-y-6">
+      <!-- skeleton resumo -->
+      <div class="grid grid-cols-3 gap-4">
+        @for (i of [0,1,2]; track i) {
+          <div class="nb-border nb-shadow rounded-[6px] bg-surface p-5 animate-pulse">
+            <div class="h-3 bg-muted/20 rounded mb-3 w-1/2"></div>
+            <div class="h-8 bg-muted/20 rounded w-3/4"></div>
+          </div>
+        }
+      </div>
+      <!-- skeleton tabela -->
+      <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 animate-pulse space-y-3">
+        @for (i of [0,1,2,3,4]; track i) {
+          <div class="h-4 bg-muted/20 rounded w-full"></div>
+        }
+      </div>
+    </div>
+  } @else if (errorMsg) {
+    <app-status-view [error]="errorMsg" (retry)="retry()" />
+  } @else if (analise.value(); as dados) {
+
+    <!-- 1. Resumo da rede -->
+    <section class="space-y-4">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Resumo da rede</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
+          <p class="text-muted text-xs uppercase tracking-wide mb-1">Densidade</p>
+          <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.densidade) }}</p>
+        </div>
+        <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
+          <p class="text-muted text-xs uppercase tracking-wide mb-1">Assortatividade</p>
+          <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.assortatividade) }}</p>
+        </div>
+        <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
+          <p class="text-muted text-xs uppercase tracking-wide mb-1">Modularidade</p>
+          <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.modularidade) }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Centralidades -->
+    <section class="space-y-4">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Centralidades</h2>
+
+      <!-- Seletor de métrica -->
+      <div class="flex flex-wrap gap-2">
+        @for (m of metricas; track m.chave) {
+          @if (metricaDisponivel(m.chave)) {
+            <button
+              (click)="metricaSelecionada.set(m.chave)"
+              class="nb-border nb-shadow-sm nb-interactive px-3 py-1.5 text-sm font-semibold rounded-[6px] cursor-pointer nb-themed transition-colors"
+              [class.bg-primary]="metricaSelecionada() === m.chave"
+              [class.text-on-primary]="metricaSelecionada() === m.chave"
+              [class.bg-surface]="metricaSelecionada() !== m.chave"
+              [class.text-foreground]="metricaSelecionada() !== m.chave"
+            >
+              {{ m.label }}
+            </button>
+          } @else {
+            <span
+              class="nb-border px-3 py-1.5 text-sm font-semibold rounded-[6px] opacity-40 cursor-not-allowed bg-surface text-foreground"
+              title="Métrica em desenvolvimento"
+            >
+              {{ m.label }} <span class="text-xs">(em dev)</span>
+            </span>
+          }
+        }
+      </div>
+
+      <!-- Top-N -->
+      <div class="flex gap-2 items-center">
+        <span class="text-muted text-sm">Exibir top:</span>
+        @for (n of topNOpcoes; track n) {
+          <button
+            (click)="topN.set(n)"
+            class="nb-border nb-shadow-sm px-3 py-1 text-sm font-mono font-bold rounded-[6px] cursor-pointer nb-interactive nb-themed"
+            [class.bg-secondary]="topN() === n"
+            [class.text-on-secondary]="topN() === n"
+            [class.bg-surface]="topN() !== n"
+          >
+            {{ n }}
+          </button>
+        }
+      </div>
+
+      @if (rankingAtual().length) {
+        <app-ranking-table [items]="rankingAtual()" [topN]="topN()" />
+      } @else {
+        <p class="text-muted text-sm nb-border rounded-[6px] p-4 bg-surface">
+          Nenhum dado de centralidade disponível para esta métrica.
+        </p>
+      }
+    </section>
+
+    <!-- 3. Comunidades -->
+    <section class="space-y-4">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">
+        Comunidades
+        @if (dados.modularidade) {
+          <span class="font-mono text-base ml-2 text-muted">mod. {{ formatarNum(dados.modularidade) }}</span>
+        }
+      </h2>
+
+      @if (comunidadesEntries().length) {
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          @for (entry of comunidadesEntries(); track entry[0]; let idx = $index) {
+            <div
+              class="nb-border-3 nb-shadow rounded-[6px] p-4 bg-surface nb-themed"
+              [style.border-color]="corComunidade(idx)"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="nb-border rounded-full px-2.5 py-0.5 text-xs font-bold"
+                  [style.background-color]="corComunidade(idx)"
+                  style="color: #000; border-color: #000"
+                >
+                  Comunidade {{ idx + 1 }}
+                </span>
+                <span class="font-mono font-bold text-sm text-muted">
+                  {{ entry[1].length }} membros
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                @for (user of entry[1].slice(0, 10); track user) {
+                  <span class="text-xs font-mono nb-border rounded px-1.5 py-0.5 bg-background">
+                    {{ user }}
+                  </span>
+                }
+                @if (entry[1].length > 10) {
+                  <span class="text-xs text-muted font-mono">+{{ entry[1].length - 10 }} mais</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="text-muted text-sm nb-border rounded-[6px] p-4 bg-surface">
+          Nenhuma comunidade detectada.
+        </p>
+      }
+    </section>
+
+    <!-- 4. Pontes -->
+    <section class="space-y-4">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Pontes</h2>
+
+      @if (pontesEntries().length) {
+        <div class="space-y-6">
+          @for (entry of pontesEntries(); track entry[0]) {
+            <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
+              <div class="flex items-center gap-3 mb-4">
+                <h3 class="font-bold text-base">{{ pontesLabel(entry[0]) }}</h3>
+                <span class="nb-border rounded-full px-2.5 py-0.5 text-xs font-mono font-bold bg-muted/10">
+                  {{ entry[1].length }}
+                </span>
+              </div>
+              @if (entry[1].length) {
+                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  @for (par of entry[1].slice(0, 30); track $index) {
+                    <div class="nb-border rounded-[6px] px-3 py-2 text-sm font-mono bg-background flex items-center gap-2">
+                      <span class="truncate">{{ par[0] }}</span>
+                      <span class="text-muted">—</span>
+                      <span class="truncate">{{ par[1] }}</span>
+                    </div>
+                  }
+                  @if (entry[1].length > 30) {
+                    <p class="text-muted text-xs col-span-full">
+                      + {{ entry[1].length - 30 }} pontes adicionais
+                    </p>
+                  }
+                </div>
+              } @else {
+                <p class="text-muted text-sm">Nenhuma ponte encontrada nesta categoria.</p>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="text-muted text-sm nb-border rounded-[6px] p-4 bg-surface">
+          Nenhuma ponte identificada.
+        </p>
+      }
+    </section>
+
+  }
+</div>

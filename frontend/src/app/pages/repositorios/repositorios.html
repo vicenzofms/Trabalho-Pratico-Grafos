@@ -1,0 +1,123 @@
+<div class="space-y-8">
+
+  <!-- Bloco Minerar -->
+  <section class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-6 relative overflow-hidden">
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="font-bold text-xl">Minerar repositório</h2>
+      @if (!mineracaoHabilitada) {
+        <span class="nb-border rounded-full px-3 py-0.5 text-xs font-bold bg-secondary text-on-secondary uppercase tracking-wide">
+          Em breve
+        </span>
+      }
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <div class="flex-1 min-w-64">
+        <input
+          type="text"
+          placeholder="owner/repo"
+          [value]="inputRepo()"
+          (input)="inputRepo.set($any($event.target).value)"
+          [disabled]="!mineracaoHabilitada"
+          class="w-full nb-border nb-shadow-sm rounded-[6px] px-4 py-2.5 bg-background text-foreground font-mono placeholder:text-muted focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        @if (inputErro()) {
+          <p class="text-danger text-sm mt-1">{{ inputErro() }}</p>
+        }
+      </div>
+      <button
+        (click)="minerar()"
+        [disabled]="!mineracaoHabilitada || !inputRepo().trim()"
+        class="nb-border-3 nb-shadow nb-interactive bg-primary text-on-primary font-bold px-6 py-2.5 rounded-[6px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+        [title]="!mineracaoHabilitada ? 'Backend em modo cache-only — mineração não disponível' : ''"
+      >
+        Minerar
+      </button>
+    </div>
+  </section>
+
+  <!-- Lista de Repositórios -->
+  <section>
+    <h1 class="font-bold text-2xl mb-6">Repositórios</h1>
+
+    @if (repos.isLoading()) {
+      <app-status-view [loading]="true" [skeletonCount]="3" />
+    } @else if (errorMsg) {
+      <app-status-view [error]="errorMsg" (retry)="retry()" />
+    } @else if (listaVazia) {
+      <app-status-view
+        [empty]="true"
+        emptyTitle="Nenhum repositório disponível"
+        [emptyMessage]="mineracaoHabilitada
+          ? 'Use o campo acima para minerar um repositório do GitHub.'
+          : 'Os repositórios são carregados do cache. Nenhum foi encontrado.'"
+      />
+    } @else {
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        @for (repo of repos.value(); track repo.nome) {
+          <article
+            class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 flex flex-col gap-4 nb-themed"
+            [class.nb-interactive]="repo.estado === 'disponivel'"
+            [class.cursor-pointer]="repo.estado === 'disponivel'"
+            (click)="repo.estado === 'disponivel' && analisar(repo)"
+            (keydown.enter)="repo.estado === 'disponivel' && analisar(repo)"
+            [tabindex]="repo.estado === 'disponivel' ? 0 : -1"
+            [attr.role]="repo.estado === 'disponivel' ? 'button' : null"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-base break-all">{{ repo.nome }}</h3>
+              <span
+                class="nb-border rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide flex-shrink-0"
+                [ngClass]="badgeClasse(repo.estado)"
+              >
+                {{ badgeLabel(repo.estado) }}
+                @if (repo.estado === 'minerando' || estaMinrando(repo.nome)) {
+                  <span class="inline-block animate-spin ml-1">⟳</span>
+                }
+              </span>
+            </div>
+
+            @if (repo.estado === 'disponivel') {
+              <div class="flex gap-6">
+                <div>
+                  <p class="text-muted text-xs mb-0.5">Usuários</p>
+                  <p class="font-mono font-bold text-lg tabular-nums">
+                    {{ repo.quantidade_usuarios ?? '—' }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-muted text-xs mb-0.5">Interações</p>
+                  <p class="font-mono font-bold text-lg tabular-nums">
+                    {{ repo.quantidade_interacoes ?? '—' }}
+                  </p>
+                </div>
+              </div>
+            }
+
+            @if (repo.estado === 'erro') {
+              <p class="text-danger text-sm">Falha ao processar este repositório.</p>
+            }
+
+            <div class="flex gap-2 mt-auto" (click)="$event.stopPropagation()">
+              <button
+                (click)="analisar(repo)"
+                [disabled]="repo.estado !== 'disponivel'"
+                class="flex-1 nb-border nb-shadow-sm nb-interactive bg-primary text-on-primary font-bold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+              >
+                Analisar
+              </button>
+              <button
+                (click)="atualizar(repo)"
+                [disabled]="!mineracaoHabilitada || repo.estado !== 'disponivel'"
+                class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                [title]="!mineracaoHabilitada ? 'Em breve' : 'Atualizar dados'"
+              >
+                Atualizar
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+</div>
