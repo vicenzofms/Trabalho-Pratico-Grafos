@@ -1,0 +1,37 @@
+<header class="sticky top-0 z-50 bg-surface border-b-[3px] border-ink nb-themed">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
+    <a routerLink="/" class="font-bold text-xl tracking-tight text-foreground no-underline flex-shrink-0">
+      Grafos<span class="text-primary">Lab</span>
+    </a>
+
+    @if (repositorio.selecionado(); as sel) {
+      <span class="text-muted text-sm hidden sm:inline">
+        {{ sel.owner }}/{{ sel.repo }}
+      </span>
+      <nav class="flex gap-2 ml-2">
+        <a
+          [routerLink]="['/' + sel.owner + '/' + sel.repo + '/visao-geral']"
+          routerLinkActive="bg-primary text-on-primary"
+          class="px-3 py-1.5 text-sm font-semibold nb-border nb-shadow-sm rounded-[6px] nb-interactive nb-themed text-foreground no-underline"
+        >
+          Visão Geral
+        </a>
+        <a
+          [routerLink]="['/' + sel.owner + '/' + sel.repo + '/metricas']"
+          routerLinkActive="bg-primary text-on-primary"
+          class="px-3 py-1.5 text-sm font-semibold nb-border nb-shadow-sm rounded-[6px] nb-interactive nb-themed text-foreground no-underline"
+        >
+          Métricas
+        </a>
+      </nav>
+    }
+
+    <div class="ml-auto">
+      <app-theme-toggle />
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+  <router-outlet />
+</main>
