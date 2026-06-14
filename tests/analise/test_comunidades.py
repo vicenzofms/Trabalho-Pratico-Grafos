@@ -32,6 +32,7 @@ def _dois_triangulos_ligados() -> GrafoMatrizAdjacencia:
     return grafo
 
 
+# Inicio dos testes em modularidade()
 def test_modularidade_tudo_numa_comunidade_eh_zero():
     # Arrange: qualquer grafo, com todos os vértices na mesma comunidade
     grafo = _dois_triangulos_ligados()
@@ -69,6 +70,7 @@ def test_modularidade_dois_triangulos_particao_correta():
     # Assert: m = 7; cada triângulo tem Σin = 6 (3 arestas × 2 direções) e
     # Σtot = 7 (graus 2+2+3) → Q = 2·[6/14 − (7/14)²] = 5/14 ≈ 0.357
     assert q == pytest.approx(5 / 14)
+# Fim dos testes em modularidade()
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +93,7 @@ def _completo(n: int) -> GrafoMatrizAdjacencia:
     return grafo
 
 
+# Inicio dos testes em louvain()
 def test_louvain_retorna_um_rotulo_por_vertice():
     # Protege contra o bug de composição: a saída tem que ter um rótulo por
     # vértice ORIGINAL, não um por comunidade.
@@ -166,3 +169,4 @@ def test_louvain_nao_e_pior_que_particoes_triviais():
 
     assert q_louvain >= modularidade(grafo, [0] * n)            # tudo junto (Q = 0)
     assert q_louvain >= modularidade(grafo, list(range(n)))     # cada um sozinho (Q < 0)
+# Fim dos testes em louvain()

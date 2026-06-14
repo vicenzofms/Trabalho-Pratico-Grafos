@@ -16,5 +16,5 @@ CORES: dict[Cor, str] = {
 RESET = "\033[0m"
 
 def colorir(texto: str, cor: Cor):
-    print(f"{CORES[cor]}{texto}{RESET}")
+    return f"{CORES[cor]}{texto}{RESET}"
 
