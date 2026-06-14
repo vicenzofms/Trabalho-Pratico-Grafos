@@ -16,6 +16,7 @@ def test_listar_repositorios(client):
     assert repos[0]["estado"] == "disponivel"
     assert repos[0]["quantidade_usuarios"] == 5
     assert repos[0]["quantidade_interacoes"] == 9
+    assert repos[0]["cacheado_em"] is not None
 
 
 def test_resumo_repositorio_disponivel(client):
@@ -24,6 +25,7 @@ def test_resumo_repositorio_disponivel(client):
     corpo = resposta.json()
     assert corpo["estado"] == "disponivel"
     assert corpo["quantidade_usuarios"] == 5
+    assert corpo["cacheado_em"] is not None
 
 
 def test_resumo_repositorio_ausente_responde_200_com_estado(client):
@@ -31,6 +33,7 @@ def test_resumo_repositorio_ausente_responde_200_com_estado(client):
     resposta = client.get("/api/repositorios/fantasma/repo")
     assert resposta.status_code == 200
     assert resposta.json()["estado"] == "ausente"
+    assert resposta.json()["cacheado_em"] is None
 
 
 def test_resumo_dos_grafos(client):

@@ -1,9 +1,4 @@
-"""Rotas de repositórios — leitura (MVP) + mineração (stub 501 no MVP).
-
-As três rotas de mineração já existem aqui com schema definido, mas respondem
-501 via o `GerenciadorMineracao` stub. A Fase 6 só troca o stub pela
-implementação real; estas rotas e os schemas ficam intactos.
-"""
+"""Rotas de repositórios, incluindo leitura, exclusão e mineração assíncrona."""
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
@@ -50,7 +45,7 @@ def excluir_repositorio(
     analise.invalidar(nome)  # limpa o cache de análise em memória
 
 
-# --- Mineração (Fase 6) — disparo assíncrono; stub responde 501 no modo leitura --
+# --- Mineração: disparo assíncrono em background -----------------------------
 @router.post("/{owner}/{repo}/minerar", response_model=JobMineracao, status_code=202)
 def minerar_repositorio(
     owner: str,
@@ -59,7 +54,7 @@ def minerar_repositorio(
     gerenciador: GerenciadorMineracao = Depends(get_gerenciador_mineracao),
 ) -> JobMineracao:
     """Dispara a mineração de um repo **novo** (exige estado AUSENTE → senão 409)."""
-    job = gerenciador.iniciar(f"{owner}/{repo}")  # valida pré-condições (409/503) ou 501 no stub
+    job = gerenciador.iniciar(f"{owner}/{repo}")  # valida pré-condições (409/503)
     tarefas.add_task(gerenciador.executar_job, job.job_id)
     return job
 

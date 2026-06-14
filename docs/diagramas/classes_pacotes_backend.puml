@@ -1,0 +1,188 @@
+@startuml
+title Diagrama de classes e pacotes - backend e nucleo
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "grafos" {
+  abstract class GrafoAbstrato {
+    - qntdVertices: int
+    - qntdArestas: int
+    - rotulosVertices: list[str]
+    - grausEntrada: list[int]
+    - grausSaida: list[int]
+    - pesosVertices: list[float]
+    + adicionarAresta(u, v, peso)
+    + removeAresta(u, v)
+    + existeAresta(u, v)
+    + getSucessores(u)
+    + getPredecessores(u)
+    + setPesoAresta(u, v, peso)
+    + getPesoAresta(u, v)
+    + isConexo()
+    + isCompleto()
+  }
+
+  class GrafoListaAdjacencia {
+    - lista: list[dict[int, float]]
+    - _cachePredecessores: list[list[int]]
+    + getSucessores(u)
+    + getPredecessores(u)
+    + existeAresta(u, v)
+  }
+
+  class GrafoMatrizAdjacencia {
+    - matriz: list[array]
+    - _cacheSucessores: list[list[int]]
+    - _cachePredecessores: list[list[int]]
+    + getSucessores(u)
+    + getPredecessores(u)
+    + existeAresta(u, v)
+  }
+}
+
+package "minerador" {
+  class Minerador {
+    - __clienteGithub: ClienteGithub
+    - __mapaUsuarios: MapaUsuarios
+    - __mapaInteracoes: dict
+    - __requestsPendentes: list
+    + executar(sleepTime, reprocessar_pendencias)
+    + salvarNoCache()
+    + carregarDoCache()
+    + exportarDados()
+  }
+
+  class ClienteGithub {
+    - __tokens: list[TokenEstado]
+    - __urlBase: str
+    + get(endpoint, params, obrigatorio, opts)
+    + getPaginado(endpoint, params, opts, obrigatorio)
+    + getPaginadoCursor(endpoint, params, opts, obrigatorio)
+  }
+
+  class MapaUsuarios {
+    - __usuarios: dict[str, int]
+    - __ids: list[str]
+    + buscarOuRegistrar(username)
+    + exportarUsuarios()
+  }
+
+  class Interacao <<dataclass>> {
+    + origem: str
+    + destino: str
+    + peso: int
+    + tipo: str
+  }
+}
+
+package "backend.fontes" {
+  abstract class FonteDeDados {
+    + listar()
+    + carregar(repo)
+    + versao(repo)
+    + remover(repo)
+  }
+
+  class FonteCache {
+    - _diretorio: str
+    + listar()
+    + carregar(repo)
+    + versao(repo)
+    + remover(repo)
+  }
+}
+
+package "backend.mineracao" {
+  class GerenciadorMineracao {
+    - _fonte: FonteDeDados
+    - _tokens: list[str]
+    - _jobs: dict[str, JobMineracao]
+    + iniciar(repo)
+    + atualizar(repo)
+    + executar_job(job_id)
+    + status(job_id)
+    + status_do_repo(repo)
+    + remover_job(repo)
+  }
+}
+
+package "backend.servicos" {
+  class RepositorioServico {
+    - _fonte: FonteDeDados
+    - _gerenciador: GerenciadorMineracao
+    + listar()
+    + obter(repo)
+    + remover(repo)
+  }
+
+  class GrafoServico {
+    - _fonte: FonteDeDados
+    + construir(repo, tipo, representacao)
+    + construir_todos(repo, representacao)
+    + resumir(repo, tipo, representacao)
+    + resumir_todos(repo, representacao)
+  }
+
+  class AnaliseServico {
+    - _grafos: GrafoServico
+    - _fonte: FonteDeDados
+    - _cache: dict
+    + relatorio(repo, tipo, representacao)
+    + invalidar(repo)
+  }
+}
+
+package "backend.routers" {
+  class RepositoriosRouter <<router>>
+  class GrafosRouter <<router>>
+  class AnaliseRouter <<router>>
+}
+
+package "analise" {
+  class centralidade <<module>>
+  class coesao <<module>>
+  class comunidades <<module>>
+  class caminhos <<module>>
+  class pontes <<module>>
+}
+
+package "gephi" {
+  class gephi <<module>> {
+    + para_gephi(grafo, nome, pasta)
+  }
+}
+
+GrafoAbstrato <|-- GrafoListaAdjacencia
+GrafoAbstrato <|-- GrafoMatrizAdjacencia
+FonteDeDados <|-- FonteCache
+
+Minerador *-- ClienteGithub
+Minerador *-- MapaUsuarios
+Minerador o-- Interacao
+
+GerenciadorMineracao --> FonteDeDados
+GerenciadorMineracao ..> Minerador : cria e executa
+RepositorioServico --> FonteDeDados
+RepositorioServico --> GerenciadorMineracao
+GrafoServico --> FonteDeDados
+GrafoServico ..> GrafoAbstrato : constroi
+GrafoServico ..> GrafoListaAdjacencia
+GrafoServico ..> GrafoMatrizAdjacencia
+AnaliseServico --> GrafoServico
+AnaliseServico --> FonteDeDados
+AnaliseServico ..> centralidade
+AnaliseServico ..> coesao
+AnaliseServico ..> comunidades
+AnaliseServico ..> pontes
+comunidades ..> GrafoAbstrato
+centralidade ..> caminhos
+gephi ..> GrafoAbstrato
+GrafosRouter ..> GrafoServico
+GrafosRouter ..> gephi
+AnaliseRouter ..> AnaliseServico
+RepositoriosRouter ..> RepositorioServico
+RepositoriosRouter ..> GerenciadorMineracao
+
+@enduml

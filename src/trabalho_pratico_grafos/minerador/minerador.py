@@ -437,7 +437,7 @@ class Minerador:
         # Atualiza o array final
         self.__requestsPendentes = novasPendencias
 
-    # Exporta dados que serão utilizados pelo builder
+    # Exporta dados no formato consumido pelos serviços do backend.
     def exportarDados(self) -> dict | None:
         if (self.__mapaUsuarios.quantidadeDeUsuarios() <= 0 or len(self.__mapaInteracoes) <= 0):
             return None
@@ -454,4 +454,3 @@ class Minerador:
                 for interacao in self.__mapaInteracoes.values()
             ]
         }
-

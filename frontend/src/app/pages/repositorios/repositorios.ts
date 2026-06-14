@@ -183,6 +183,11 @@ export class Repositorios {
     return map[estado] ?? estado;
   }
 
+  formatarCacheadoEm(valor: string | null): string {
+    if (!valor) return '—';
+    return new Intl.DateTimeFormat('pt-BR').format(new Date(valor));
+  }
+
   retry() {
     this.repos.reload();
   }

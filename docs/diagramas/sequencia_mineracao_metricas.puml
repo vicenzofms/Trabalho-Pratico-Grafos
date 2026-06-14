@@ -1,0 +1,73 @@
+@startuml
+title Sequencia - mineracao ate visualizacao de metricas
+
+actor Usuario
+participant "Frontend Angular\nRepositorios/Metricas" as Front
+participant "Api service" as Api
+participant "FastAPI\nrepositorios router" as RepoRouter
+participant "GerenciadorMineracao" as Jobs
+participant "Minerador" as Minerador
+participant "ClienteGithub" as GitHub
+participant "FonteCache\nJSON em src/data" as Cache
+participant "FastAPI\ngrafos/analise routers" as AnaliseRouter
+participant "GrafoServico" as GrafoServico
+participant "AnaliseServico" as AnaliseServico
+participant "Pacote analise" as Analise
+
+Usuario -> Front : informa owner/repo e clica Minerar
+Front -> Api : minerar(owner, repo)
+Api -> RepoRouter : POST /api/repositorios/{owner}/{repo}/minerar
+RepoRouter -> Jobs : iniciar(owner/repo)
+Jobs -> Cache : versao(repo)
+Cache --> Jobs : None (ausente)
+Jobs --> RepoRouter : JobMineracao(estado="executando")
+RepoRouter --> Api : 202 + job_id
+Api --> Front : job_id
+
+RepoRouter -> Jobs : executar_job(job_id) <<BackgroundTasks>>
+Jobs -> Minerador : executar(reprocessar_pendencias=True)
+Minerador -> GitHub : repos, issues, pulls, comments, reviews, merges
+GitHub --> Minerador : respostas paginadas
+Minerador -> Minerador : converte eventos em Interacao
+Jobs -> Minerador : salvarNoCache()
+Minerador -> Cache : grava owner_repo.json
+Jobs -> Jobs : estado="concluido"
+
+loop ate concluir
+  Front -> Api : statusMineracao(owner, repo, job_id)
+  Api -> RepoRouter : GET /minerar/status?job_id=...
+  RepoRouter -> Jobs : status(job_id)
+  Jobs --> RepoRouter : JobMineracao
+  RepoRouter --> Api : estado atual
+  Api --> Front : atualiza card
+end
+
+Usuario -> Front : clica Analisar
+Front -> Api : resumoGrafos(owner, repo, representacao)
+Api -> AnaliseRouter : GET /api/repositorios/{owner}/{repo}/grafos
+AnaliseRouter -> GrafoServico : resumir_todos(repo, representacao)
+GrafoServico -> Cache : carregar(repo)
+Cache --> GrafoServico : usuarios + interacoes
+GrafoServico -> GrafoServico : constroi integrado, comentarios, fechamento e prs
+GrafoServico --> AnaliseRouter : GrafoResumo[]
+AnaliseRouter --> Api : vertices, arestas, densidade
+Api --> Front : exibe visao geral
+
+Usuario -> Front : abre Metricas
+Front -> Api : analise(owner, repo, tipo, representacao)
+Api -> AnaliseRouter : GET /api/repositorios/{owner}/{repo}/analise
+AnaliseRouter -> AnaliseServico : relatorio(repo, tipo, representacao)
+AnaliseServico -> Cache : versao(repo)
+AnaliseServico -> GrafoServico : construir(repo, tipo, representacao)
+GrafoServico -> Cache : carregar(repo)
+Cache --> GrafoServico : usuarios + interacoes
+GrafoServico --> AnaliseServico : GrafoAbstrato rotulado
+AnaliseServico -> Analise : centralidades, coesao, Louvain, pontes
+Analise --> AnaliseServico : resultados por indice
+AnaliseServico -> AnaliseServico : converte indices para usernames e cacheia
+AnaliseServico --> AnaliseRouter : RelatorioAnalise
+AnaliseRouter --> Api : JSON de metricas
+Api --> Front : rankings, comunidades, pontes e resumo
+Front --> Usuario : visualiza metricas
+
+@enduml

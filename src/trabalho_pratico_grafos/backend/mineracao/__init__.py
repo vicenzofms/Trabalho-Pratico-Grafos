@@ -1,7 +1,5 @@
-"""Costura 3 — gerência de jobs de mineração (interface + stub + implementação real)."""
+"""Gerência de jobs de mineração."""
 
 from .base import GerenciadorMineracao
-from .real import GerenciadorMineracaoReal
-from .stub import GerenciadorMineracaoStub
 
-__all__ = ["GerenciadorMineracao", "GerenciadorMineracaoStub", "GerenciadorMineracaoReal"]
+__all__ = ["GerenciadorMineracao"]

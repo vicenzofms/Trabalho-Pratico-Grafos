@@ -5,6 +5,7 @@ export interface RepositorioResumo {
   estado: EstadoRepositorio;
   quantidade_usuarios: number | null;
   quantidade_interacoes: number | null;
+  cacheado_em: string | null;
 }
 
 export type TipoGrafo = 'integrado' | 'comentarios' | 'fechamento' | 'prs';

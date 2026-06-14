@@ -1,8 +1,7 @@
-"""Construção dos 4 grafos a partir dos dados da fonte (Fase 3).
+"""Construção dos 4 grafos a partir dos dados minerados.
 
-A lógica de `construir_grafo_por_tipo` / `agregar_aresta` / `definir_rotulos` é a
-mesma já validada no `scripts/builder.py`, migrada para cá com tipos de retorno
-testáveis. O serviço depende só da abstração `GrafoAbstrato` e da `FonteDeDados`.
+O serviço depende só da abstração `GrafoAbstrato` e da `FonteDeDados`, mantendo a
+construção dos grafos separada da origem dos dados e da camada HTTP.
 """
 
 from trabalho_pratico_grafos.grafos import GrafoAbstrato, GrafoMatrizAdjacencia
@@ -14,8 +13,7 @@ from ..schemas.grafo import GrafoResumo
 from .analise_servico import densidade_opcional
 
 # tipo do grafo -> conjunto de `tipo` de interação que o compõem.
-# Conjunto vazio = todas as interações (grafo integrado). Mapeia exatamente os
-# grafos do builder: geral, comentários, fechamento e PR (revisão + merge).
+# Conjunto vazio = todas as interações (grafo integrado).
 TIPOS_INTERACAO: dict[str, set[str]] = {
     "integrado": set(),
     "comentarios": {"comentario_issue", "comentario_pull_request"},

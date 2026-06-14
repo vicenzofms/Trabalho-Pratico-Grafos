@@ -1,17 +1,9 @@
-"""Análise da rede (Fase 4) — o núcleo do backend.
+"""Análise da rede para o backend.
 
-Enquanto a fachada `AnalisadorRede` (parte A) não existe, este serviço usa um
-**adaptador de fallback** que chama diretamente as funções já entregues do pacote
-`analise` (`centralidade_*`, `pagerank`, `louvain`, `modularidade`, `pontes_*`).
-As funções ainda pendentes das partes A/B (proximidade, intermediação, densidade,
-clustering, assortatividade) são detectadas em tempo de import e ficam `None`
-até existirem — quando entrarem, populam sozinhas, sem mudar este arquivo.
-
-Responsabilidades:
-- cachear o relatório por `(repo, tipo, versão_do_json)` (costura 4: re-minerar
-  muda o mtime e invalida o cache sozinho);
-- converter os resultados indexados por id de vértice para `{username: valor}`,
-  montando rankings já ordenados (o front quer nomes, não índices).
+Este serviço orquestra as funções do pacote `analise` (`centralidade_*`,
+`pagerank`, `louvain`, `modularidade`, `pontes_*` e coesão), cacheia o relatório
+por `(repo, tipo, representacao, versão_do_json)` e converte resultados indexados
+por vértice para estruturas nomeadas por username, prontas para o frontend.
 """
 
 from __future__ import annotations
