@@ -4,11 +4,6 @@
   <section class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-6 relative overflow-hidden">
     <div class="flex items-center gap-3 mb-4">
       <h2 class="font-bold text-xl">Minerar repositório</h2>
-      @if (!mineracaoHabilitada) {
-        <span class="nb-border rounded-full px-3 py-0.5 text-xs font-bold bg-secondary text-on-secondary uppercase tracking-wide">
-          Em breve
-        </span>
-      }
     </div>
 
     <div class="flex gap-3 flex-wrap">
@@ -110,7 +105,7 @@
                 (click)="atualizar(repo)"
                 [disabled]="!mineracaoHabilitada || repo.estado !== 'disponivel'"
                 class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                [title]="!mineracaoHabilitada ? 'Em breve' : 'Atualizar dados'"
+                [title]="'Atualizar dados'"
               >
                 Atualizar
               </button>
