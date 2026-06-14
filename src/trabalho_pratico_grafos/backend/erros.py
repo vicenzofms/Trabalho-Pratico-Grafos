@@ -42,3 +42,30 @@ class MineracaoIndisponivelError(ErroBackend):
 
     def __init__(self, detalhe: str = "mineração indisponível neste modo") -> None:
         super().__init__(detalhe)
+
+
+class ConflitoMineracaoError(ErroBackend):
+    """Pré-condição de mineração violada (Fase 6) → 409 Conflict.
+
+    Ex.: `minerar` num repo que já existe (use `atualizar`), `atualizar` num repo
+    ausente (use `minerar`), ou disparo enquanto já há um job em andamento.
+    """
+
+
+class JobNaoEncontradoError(ErroBackend):
+    """Consulta de status com job_id inexistente (Fase 6) → 404."""
+
+    def __init__(self, job_id: str) -> None:
+        self.job_id = job_id
+        super().__init__(f"Job de mineração '{job_id}' não encontrado.")
+
+
+class TokensAusentesError(ErroBackend):
+    """Mineração pedida sem nenhum token do GitHub configurado → 503.
+
+    A mineração está implementada (Fase 6), mas indisponível por falta de
+    `GITHUB_TOKENS` no ambiente.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("nenhum token do GitHub configurado (defina GITHUB_TOKENS)")

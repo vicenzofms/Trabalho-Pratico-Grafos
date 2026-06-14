@@ -1,8 +1,8 @@
-"""Stub do `GerenciadorMineracao` (MVP) — responde 501 Not Implemented.
+"""Stub do `GerenciadorMineracao` (modo cache-only) — responde 501.
 
-Fixa o contrato HTTP das rotas de mineração desde já. A Fase 6 troca esta classe
-por uma implementação real na injeção de dependência; rotas e schemas ficam
-intactos.
+Mantido para o modo sem mineração: todas as rotas de disparo respondem
+501 Not Implemented. `status_do_repo` devolve None, então o `RepositorioServico`
+resolve o estado só pelo cache (DISPONIVEL/AUSENTE), como no MVP.
 """
 
 from ..erros import MineracaoIndisponivelError
@@ -17,5 +17,11 @@ class GerenciadorMineracaoStub(GerenciadorMineracao):
     def atualizar(self, repo: str) -> JobMineracao:
         raise MineracaoIndisponivelError()
 
+    def executar_job(self, job_id: str) -> None:  # nunca chamado (iniciar já levanta 501)
+        raise MineracaoIndisponivelError()
+
     def status(self, job_id: str) -> JobMineracao:
         raise MineracaoIndisponivelError()
+
+    def status_do_repo(self, repo: str) -> JobMineracao | None:
+        return None

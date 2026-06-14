@@ -107,7 +107,7 @@ class Minerador:
             print(colorir(f"Erro ao salvar cache: {e}", "vermelho"))
     # --- Fim do Cache
 
-    def executar(self, sleepTime: float = 0.8):
+    def executar(self, sleepTime: float = 0.8, reprocessar_pendencias: bool = True):
         inicio = time.time()
         print(f"--- Começando minerador: {colorir(self.__repositorio, 'amarelo')} ---")
 
@@ -168,7 +168,10 @@ class Minerador:
         tempoTotal = time.time() - inicio # salva tempo final antes de responder
         if len(self.__requestsPendentes) > 0:
             print(f"Existem {len(self.__requestsPendentes)} requests que não foram concluídas")
-            if input("Deseja tentar processá-las novamente? [s/N] -> ").strip().lower() == "s":
+            # Costura 5: antes pedia confirmação via input() (trava num servidor, sem
+            # terminal). Agora o reprocessamento é controlado pelo parâmetro
+            # `reprocessar_pendencias` (default True faz uma única passada de retry).
+            if reprocessar_pendencias:
                 inicio2 = time.time()
                 self.__processarPendencias(sleepTime)
                 tempoTotal += (time.time() - inicio2)

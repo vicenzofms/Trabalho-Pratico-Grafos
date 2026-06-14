@@ -8,14 +8,15 @@ from pydantic import BaseModel
 class EstadoRepositorio(str, Enum):
     """Estado de um repositório no backend.
 
-    No MVP só existem `DISPONIVEL` (tem cache) e `AUSENTE` (nunca minerado). A
-    Fase 6 acrescenta `MINERANDO`/`ERRO` sem quebrar o contrato — o front já
-    ramifica por `estado`, então novos valores só habilitam telas novas.
+    `DISPONIVEL` (tem cache) e `AUSENTE` (nunca minerado) valem desde o MVP. A
+    Fase 6 acrescenta `MINERANDO` (job em andamento) e `ERRO` (último job falhou)
+    — o front ramifica por `estado`, então novos valores só habilitam telas novas.
     """
 
     DISPONIVEL = "disponivel"
     AUSENTE = "ausente"
-    # Fase 6 acrescenta: MINERANDO = "minerando", ERRO = "erro"
+    MINERANDO = "minerando"
+    ERRO = "erro"
 
 
 class RepositorioResumo(BaseModel):

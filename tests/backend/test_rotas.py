@@ -115,12 +115,10 @@ def test_ranking_metrica_invalida_404(client):
     assert "metricas_validas" in resposta.json()
 
 
-def test_rotas_de_mineracao_respondem_501(client):
-    minerar = client.post("/api/repositorios/octo/demo/minerar")
-    assert minerar.status_code == 501
-
-    atualizar = client.post("/api/repositorios/octo/demo/atualizar")
-    assert atualizar.status_code == 501
-
-    status = client.get("/api/repositorios/octo/demo/minerar/status?job_id=abc")
-    assert status.status_code == 501
+def test_mineracao_sem_token_indisponivel_e_status_404(client):
+    # O `client` padrão usa o gerenciador real SEM GITHUB_TOKENS configurado:
+    # o disparo de mineração responde 503 (implementada, porém indisponível).
+    assert client.post("/api/repositorios/octo/demo/minerar").status_code == 503
+    assert client.post("/api/repositorios/octo/demo/atualizar").status_code == 503
+    # status de um job inexistente -> 404
+    assert client.get("/api/repositorios/octo/demo/minerar/status?job_id=abc").status_code == 404

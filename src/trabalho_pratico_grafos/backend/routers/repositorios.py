@@ -5,7 +5,7 @@ As três rotas de mineração já existem aqui com schema definido, mas responde
 implementação real; estas rotas e os schemas ficam intactos.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 
 from ..dependencias import get_gerenciador_mineracao, get_repositorio_servico
 from ..mineracao import GerenciadorMineracao
@@ -33,25 +33,31 @@ def obter_repositorio(
     return servico.obter(f"{owner}/{repo}")
 
 
-# --- Mineração (Fase 6) — schemas fixos, stub respondendo 501 no MVP ---------
-@router.post("/{owner}/{repo}/minerar", response_model=JobMineracao)
+# --- Mineração (Fase 6) — disparo assíncrono; stub responde 501 no modo leitura --
+@router.post("/{owner}/{repo}/minerar", response_model=JobMineracao, status_code=202)
 def minerar_repositorio(
     owner: str,
     repo: str,
+    tarefas: BackgroundTasks,
     gerenciador: GerenciadorMineracao = Depends(get_gerenciador_mineracao),
 ) -> JobMineracao:
-    """Dispara a mineração de um repo novo (501 no MVP)."""
-    return gerenciador.iniciar(f"{owner}/{repo}")
+    """Dispara a mineração de um repo **novo** (exige estado AUSENTE → senão 409)."""
+    job = gerenciador.iniciar(f"{owner}/{repo}")  # valida pré-condições (409/503) ou 501 no stub
+    tarefas.add_task(gerenciador.executar_job, job.job_id)
+    return job
 
 
-@router.post("/{owner}/{repo}/atualizar", response_model=JobMineracao)
+@router.post("/{owner}/{repo}/atualizar", response_model=JobMineracao, status_code=202)
 def atualizar_repositorio(
     owner: str,
     repo: str,
+    tarefas: BackgroundTasks,
     gerenciador: GerenciadorMineracao = Depends(get_gerenciador_mineracao),
 ) -> JobMineracao:
-    """Re-minera um repo existente, invalidando os caches (501 no MVP)."""
-    return gerenciador.atualizar(f"{owner}/{repo}")
+    """Re-minera um repo **existente** (exige DISPONIVEL → senão 409); regrava o JSON."""
+    job = gerenciador.atualizar(f"{owner}/{repo}")
+    tarefas.add_task(gerenciador.executar_job, job.job_id)
+    return job
 
 
 @router.get("/{owner}/{repo}/minerar/status", response_model=JobMineracao)
@@ -61,5 +67,5 @@ def status_mineracao(
     job_id: str,
     gerenciador: GerenciadorMineracao = Depends(get_gerenciador_mineracao),
 ) -> JobMineracao:
-    """Status de um job de mineração (501 no MVP)."""
+    """Status de um job de mineração (404 se o job_id não existir)."""
     return gerenciador.status(job_id)

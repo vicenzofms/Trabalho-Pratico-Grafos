@@ -1,8 +1,9 @@
 """Interface `GerenciadorMineracao` (costura 3).
 
-As rotas e os schemas de mineração já existem no MVP, mas apontam para um stub
-que responde 501. A migração da Fase 6 = trocar o stub por uma implementação real
-(`BackgroundTasks` + dict de jobs), sem tocar nas rotas, schemas ou no front.
+As rotas e os schemas de mineração já existem desde o MVP; o que muda na Fase 6 é
+a implementação por trás. O fluxo é em duas etapas para casar com `BackgroundTasks`:
+`iniciar`/`atualizar` validam as pré-condições e **registram** o job (resposta
+imediata 202), e `executar_job` roda a mineração **em background** e atualiza o job.
 """
 
 from abc import ABC, abstractmethod
@@ -13,12 +14,20 @@ from ..schemas.repositorio import JobMineracao
 class GerenciadorMineracao(ABC):
     @abstractmethod
     def iniciar(self, repo: str) -> JobMineracao:
-        """Dispara a mineração de um repositório e devolve o job criado."""
+        """Valida (repo deve estar AUSENTE) e registra um job de mineração novo."""
 
     @abstractmethod
     def atualizar(self, repo: str) -> JobMineracao:
-        """Re-minera um repositório já existente (regrava o JSON)."""
+        """Valida (repo deve estar DISPONIVEL) e registra um job de re-mineração."""
+
+    @abstractmethod
+    def executar_job(self, job_id: str) -> None:
+        """Roda a mineração do job em background e atualiza seu estado/cache."""
 
     @abstractmethod
     def status(self, job_id: str) -> JobMineracao:
-        """Estado atual de um job de mineração."""
+        """Estado atual de um job pelo seu id (404 se não existir)."""
+
+    @abstractmethod
+    def status_do_repo(self, repo: str) -> JobMineracao | None:
+        """Último job conhecido de um repo (ou None) — usado para resolver o estado."""
