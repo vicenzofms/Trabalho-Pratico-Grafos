@@ -25,3 +25,6 @@ class GerenciadorMineracaoStub(GerenciadorMineracao):
 
     def status_do_repo(self, repo: str) -> JobMineracao | None:
         return None
+
+    def remover_job(self, repo: str) -> None:  # sem jobs no modo stub
+        return None

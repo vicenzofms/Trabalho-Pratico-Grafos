@@ -1,5 +1,4 @@
 <div class="space-y-8">
-
   <div class="flex items-center justify-between flex-wrap gap-4">
     <div>
       <h1 class="font-bold text-2xl">Visão Geral</h1>
@@ -7,9 +6,16 @@
         <p class="text-muted text-sm mt-1">{{ sel.owner }}/{{ sel.repo }}</p>
       }
     </div>
+    <a
+      routerLink="/"
+      class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm no-underline flex-shrink-0"
+    >
+      ← Repositórios
+    </a>
   </div>
 
   @if (grafos.isLoading()) {
+    <p class="text-muted text-sm font-mono animate-pulse">Carregando grafos…</p>
     <app-status-view [loading]="true" [skeletonCount]="4" />
   } @else if (errorMsg) {
     <app-status-view [error]="errorMsg" (retry)="retry()" />
@@ -19,16 +25,18 @@
       @if (grafo.tipo === 'integrado') {
         <div class="grid grid-cols-3 gap-4 sm:gap-6">
           <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 text-center nb-themed">
-            <p class="text-muted text-xs mb-1 uppercase tracking-wide">Vértices</p>
+            <p class="text-muted text-xs mb-1 uppercase tracking-wide">Usuários</p>
             <p class="font-mono font-bold text-3xl tabular-nums">{{ grafo.vertices }}</p>
           </div>
           <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 text-center nb-themed">
-            <p class="text-muted text-xs mb-1 uppercase tracking-wide">Arestas</p>
+            <p class="text-muted text-xs mb-1 uppercase tracking-wide">Interações</p>
             <p class="font-mono font-bold text-3xl tabular-nums">{{ grafo.arestas }}</p>
           </div>
           <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 text-center nb-themed">
             <p class="text-muted text-xs mb-1 uppercase tracking-wide">Densidade</p>
-            <p class="font-mono font-bold text-3xl tabular-nums">{{ grafo.densidade.toFixed(4) }}</p>
+            <p class="font-mono font-bold text-3xl tabular-nums">
+              {{ grafo.densidade.toFixed(4) }}
+            </p>
           </div>
         </div>
       }
@@ -39,9 +47,10 @@
     <div class="grid gap-5 sm:grid-cols-2">
       @for (grafo of grafos.value(); track grafo.tipo) {
         <article
-          class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 flex flex-col gap-4 nb-themed"
+          class="nb-border-3 nb-shadow-color rounded-[6px] bg-surface p-5 flex flex-col gap-4 nb-themed"
           [class.ring-2]="grafo.tipo === 'integrado'"
           [class.ring-primary]="grafo.tipo === 'integrado'"
+          [style.--shadow-color]="grafo.tipo === 'integrado' ? 'var(--primary)' : null"
         >
           <div class="flex items-center justify-between gap-2">
             <h3 class="font-bold text-lg">{{ tipoLabel(grafo.tipo) }}</h3>
@@ -64,17 +73,32 @@
             </div>
             <div>
               <p class="text-muted text-xs mb-0.5">Densidade</p>
-              <p class="font-mono font-bold text-xl tabular-nums">{{ grafo.densidade.toFixed(3) }}</p>
+              <p class="font-mono font-bold text-xl tabular-nums">
+                {{ grafo.densidade.toFixed(3) }}
+              </p>
             </div>
           </div>
 
-          <a
-            [href]="urlGephi(grafo.tipo)"
-            download
-            class="nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-secondary text-on-secondary font-bold px-4 py-2.5 rounded-[6px] text-sm no-underline mt-auto"
-          >
-            ↓ Exportar GEPHI (CSV)
-          </a>
+          <div class="flex gap-2 mt-auto">
+            <a
+              [routerLink]="linkMetricas(grafo.tipo)"
+              class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-primary text-on-primary font-bold px-4 py-2.5 rounded-[6px] text-sm no-underline"
+            >
+              Métricas
+            </a>
+            <button
+              (click)="baixarGephi(grafo.tipo)"
+              [disabled]="estaBaixando(grafo.tipo)"
+              class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-secondary text-on-secondary font-bold px-4 py-2.5 rounded-[6px] text-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait disabled:transform-none"
+            >
+              @if (estaBaixando(grafo.tipo)) {
+                <lucide-icon name="loader-2" class="w-4 h-4 animate-spin" />
+                Exportando…
+              } @else {
+                ↓ Exportar GEPHI
+              }
+            </button>
+          </div>
         </article>
       }
     </div>

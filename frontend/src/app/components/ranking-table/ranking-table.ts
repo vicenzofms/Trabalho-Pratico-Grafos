@@ -1,9 +1,11 @@
-import { Component, input } from '@angular/core';
-import { ItemRanking } from '../../models/api.models';
+import { Component, computed, input } from '@angular/core';
+import { GrauUsuario, ItemRanking } from '../../models/api.models';
+import { Tooltip } from '../tooltip/tooltip';
 
 @Component({
   selector: 'app-ranking-table',
   standalone: true,
+  imports: [Tooltip],
   template: `
     <div class="nb-border-3 nb-shadow rounded-[6px] overflow-hidden bg-surface">
       <table class="w-full" role="table">
@@ -11,6 +13,18 @@ import { ItemRanking } from '../../models/api.models';
           <tr class="border-b-[3px] border-ink">
             <th class="text-left px-4 py-3 font-bold text-sm w-12">#</th>
             <th class="text-left px-4 py-3 font-bold text-sm">Usuário</th>
+            @if (mostrarGraus()) {
+              <th class="text-right px-3 py-3 font-bold text-sm hidden sm:table-cell">
+                <app-tooltip texto="Grau de entrada (arestas recebidas)">
+                  <span>Grau ent.</span>
+                </app-tooltip>
+              </th>
+              <th class="text-right px-3 py-3 font-bold text-sm hidden sm:table-cell">
+                <app-tooltip texto="Grau de saída (arestas enviadas)">
+                  <span>Grau saí.</span>
+                </app-tooltip>
+              </th>
+            }
             <th class="text-right px-4 py-3 font-bold text-sm" aria-sort="descending">Valor</th>
           </tr>
         </thead>
@@ -23,6 +37,14 @@ import { ItemRanking } from '../../models/api.models';
             >
               <td class="px-4 py-3 font-mono text-sm text-muted">{{ i + 1 }}</td>
               <td class="px-4 py-3 font-semibold">{{ item.username }}</td>
+              @if (mostrarGraus()) {
+                <td class="px-3 py-3 text-right font-mono tabular-nums text-sm text-muted hidden sm:table-cell">
+                  {{ grau(item.username)?.entrada ?? '—' }}
+                </td>
+                <td class="px-3 py-3 text-right font-mono tabular-nums text-sm text-muted hidden sm:table-cell">
+                  {{ grau(item.username)?.saida ?? '—' }}
+                </td>
+              }
               <td class="px-4 py-3 text-right">
                 <div class="flex items-center justify-end gap-2">
                   <div class="relative h-2 w-24 bg-muted/20 nb-border rounded-full overflow-hidden hidden sm:block">
@@ -51,6 +73,13 @@ import { ItemRanking } from '../../models/api.models';
 export class RankingTable {
   items = input<ItemRanking[]>([]);
   topN = input(10);
+  graus = input<Record<string, GrauUsuario>>({});
+
+  mostrarGraus = computed(() => Object.keys(this.graus()).length > 0);
+
+  grau(username: string): GrauUsuario | undefined {
+    return this.graus()[username];
+  }
 
   maxValor() {
     const list = this.items();

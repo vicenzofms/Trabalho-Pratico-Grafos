@@ -1,17 +1,28 @@
 <div class="space-y-10">
 
-  <div>
-    <h1 class="font-bold text-2xl">Métricas</h1>
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="font-bold text-2xl">Métricas — {{ tipoLabel() }}</h1>
+      @if (repositorio.selecionado(); as sel) {
+        <p class="text-muted text-sm mt-1">{{ sel.owner }}/{{ sel.repo }}</p>
+      }
+    </div>
     @if (repositorio.selecionado(); as sel) {
-      <p class="text-muted text-sm mt-1">{{ sel.owner }}/{{ sel.repo }}</p>
+      <a
+        [routerLink]="['/', sel.owner, sel.repo, 'visao-geral']"
+        class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm no-underline flex-shrink-0"
+      >
+        ← Voltar
+      </a>
     }
   </div>
 
   @if (analise.isLoading()) {
+    <p class="text-muted text-sm font-mono animate-pulse">Carregando métricas…</p>
     <div class="space-y-6">
       <!-- skeleton resumo -->
-      <div class="grid grid-cols-3 gap-4">
-        @for (i of [0,1,2]; track i) {
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        @for (i of [0,1,2,3]; track i) {
           <div class="nb-border nb-shadow rounded-[6px] bg-surface p-5 animate-pulse">
             <div class="h-3 bg-muted/20 rounded mb-3 w-1/2"></div>
             <div class="h-8 bg-muted/20 rounded w-3/4"></div>
@@ -32,17 +43,33 @@
     <!-- 1. Resumo da rede -->
     <section class="space-y-4">
       <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Resumo da rede</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
-          <p class="text-muted text-xs uppercase tracking-wide mb-1">Densidade</p>
+          <div class="flex items-center gap-1.5 mb-1">
+            <p class="text-muted text-xs uppercase tracking-wide">Densidade</p>
+            <app-info-hint [texto]="descricoes['densidade']" />
+          </div>
           <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.densidade) }}</p>
         </div>
         <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
-          <p class="text-muted text-xs uppercase tracking-wide mb-1">Assortatividade</p>
+          <div class="flex items-center gap-1.5 mb-1">
+            <p class="text-muted text-xs uppercase tracking-wide">Coef. de Aglomeração</p>
+            <app-info-hint [texto]="descricoes['clustering']" />
+          </div>
+          <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.clustering) }}</p>
+        </div>
+        <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
+          <div class="flex items-center gap-1.5 mb-1">
+            <p class="text-muted text-xs uppercase tracking-wide">Assortatividade</p>
+            <app-info-hint [texto]="descricoes['assortatividade']" />
+          </div>
           <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.assortatividade) }}</p>
         </div>
         <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
-          <p class="text-muted text-xs uppercase tracking-wide mb-1">Modularidade</p>
+          <div class="flex items-center gap-1.5 mb-1">
+            <p class="text-muted text-xs uppercase tracking-wide">Modularidade</p>
+            <app-info-hint [texto]="descricoes['modularidade']" />
+          </div>
           <p class="font-mono font-bold text-2xl tabular-nums">{{ formatarNum(dados.modularidade) }}</p>
         </div>
       </div>
@@ -51,6 +78,12 @@
     <!-- 2. Centralidades -->
     <section class="space-y-4">
       <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Centralidades</h2>
+
+      <!-- Explicação da métrica selecionada -->
+      <div class="nb-border rounded-[6px] bg-surface p-3 text-sm nb-themed">
+        <span class="font-bold">Métrica: {{ metricaLabelAtual() }}</span>
+        <span class="text-muted"> — {{ descricoes[metricaSelecionada()] }}</span>
+      </div>
 
       <!-- Seletor de métrica -->
       <div class="flex flex-wrap gap-2">
@@ -67,12 +100,13 @@
               {{ m.label }}
             </button>
           } @else {
-            <span
-              class="nb-border px-3 py-1.5 text-sm font-semibold rounded-[6px] opacity-40 cursor-not-allowed bg-surface text-foreground"
-              title="Métrica em desenvolvimento"
-            >
-              {{ m.label }} <span class="text-xs">(em dev)</span>
-            </span>
+            <app-tooltip texto="Métrica em desenvolvimento">
+              <span
+                class="nb-border px-3 py-1.5 text-sm font-semibold rounded-[6px] opacity-40 cursor-not-allowed bg-surface text-foreground"
+              >
+                {{ m.label }} <span class="text-xs">(em dev)</span>
+              </span>
+            </app-tooltip>
           }
         }
       </div>
@@ -94,7 +128,7 @@
       </div>
 
       @if (rankingAtual().length) {
-        <app-ranking-table [items]="rankingAtual()" [topN]="topN()" />
+        <app-ranking-table [items]="rankingAtual()" [topN]="topN()" [graus]="graus()" />
       } @else {
         <p class="text-muted text-sm nb-border rounded-[6px] p-4 bg-surface">
           Nenhum dado de centralidade disponível para esta métrica.
@@ -102,23 +136,83 @@
       }
     </section>
 
-    <!-- 3. Comunidades -->
+    <!-- 3. Ranking de arestas por peso -->
     <section class="space-y-4">
-      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Ranking de Arestas / peso</h2>
+
+      <div class="flex gap-2 items-center">
+        <span class="text-muted text-sm">Exibir top:</span>
+        @for (n of topNOpcoes; track n) {
+          <button
+            (click)="topArestas.set(n)"
+            class="nb-border nb-shadow-sm px-3 py-1 text-sm font-mono font-bold rounded-[6px] cursor-pointer nb-interactive nb-themed"
+            [class.bg-secondary]="topArestas() === n"
+            [class.text-on-secondary]="topArestas() === n"
+            [class.bg-surface]="topArestas() !== n"
+          >
+            {{ n }}
+          </button>
+        }
+      </div>
+
+      @if (arestasMaisPesadas().length) {
+        <div class="nb-border-3 nb-shadow rounded-[6px] overflow-hidden bg-surface">
+          <table class="w-full" role="table">
+            <thead>
+              <tr class="border-b-[3px] border-ink">
+                <th class="text-left px-4 py-3 font-bold text-sm w-12">#</th>
+                <th class="text-left px-4 py-3 font-bold text-sm">Usuário origem</th>
+                <th class="text-left px-4 py-3 font-bold text-sm">Usuário destino</th>
+                <th class="text-right px-4 py-3 font-bold text-sm">Peso</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (aresta of arestasMaisPesadas(); track aresta.origem + '->' + aresta.destino; let i = $index) {
+                <tr
+                  class="border-b border-ink/20 hover:bg-muted/10 transition-colors"
+                  [style.animation-delay.ms]="i * 40"
+                  style="animation: fadeInUp 0.3s ease-out both"
+                >
+                  <td class="px-4 py-3 font-mono text-sm text-muted">{{ i + 1 }}</td>
+                  <td class="px-4 py-3 font-semibold break-all">{{ aresta.origem }}</td>
+                  <td class="px-4 py-3 font-semibold break-all">{{ aresta.destino }}</td>
+                  <td class="px-4 py-3 text-right font-mono tabular-nums text-sm">
+                    {{ formatarNum(aresta.peso) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <p class="text-muted text-sm nb-border rounded-[6px] p-4 bg-surface">
+          Nenhuma aresta disponível para este grafo.
+        </p>
+      }
+    </section>
+
+    <!-- 4. Comunidades -->
+    <section class="space-y-4">
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2 flex items-center gap-2">
         Comunidades
+        <app-info-hint [texto]="descricoes['comunidades']" />
         @if (dados.modularidade) {
-          <span class="font-mono text-base ml-2 text-muted">mod. {{ formatarNum(dados.modularidade) }}</span>
+          <span class="font-mono text-base ml-1 text-muted">mod. {{ formatarNum(dados.modularidade) }}</span>
         }
       </h2>
 
       @if (comunidadesEntries().length) {
+        <p class="text-muted text-xs">Clique em uma comunidade para ver todos os usuários.</p>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           @for (entry of comunidadesEntries(); track entry[0]; let idx = $index) {
-            <div
-              class="nb-border-3 nb-shadow rounded-[6px] p-4 bg-surface nb-themed"
+            <button
+              type="button"
+              (click)="abrirComunidade(idx, entry[1])"
+              class="nb-border-3 nb-shadow-color nb-interactive rounded-[6px] p-4 bg-surface nb-themed text-left cursor-pointer w-full h-full flex flex-col items-start justify-start"
               [style.border-color]="corComunidade(idx)"
+              [style.--shadow-color]="corComunidade(idx)"
             >
-              <div class="flex items-center justify-between mb-3">
+              <div class="w-full flex items-start justify-between gap-3 mb-3">
                 <span
                   class="nb-border rounded-full px-2.5 py-0.5 text-xs font-bold"
                   [style.background-color]="corComunidade(idx)"
@@ -126,13 +220,13 @@
                 >
                   Comunidade {{ idx + 1 }}
                 </span>
-                <span class="font-mono font-bold text-sm text-muted">
+                <span class="font-mono font-bold text-sm text-muted flex-shrink-0 pt-0.5">
                   {{ entry[1].length }} membros
                 </span>
               </div>
-              <div class="flex flex-wrap gap-1">
-                @for (user of entry[1].slice(0, 10); track user) {
-                  <span class="text-xs font-mono nb-border rounded px-1.5 py-0.5 bg-background">
+                <div class="flex flex-wrap items-start content-start gap-1">
+                  @for (user of entry[1].slice(0, 10); track user) {
+                  <span class="community-user-chip text-xs font-mono nb-border rounded px-1.5 py-0.5 bg-background">
                     {{ user }}
                   </span>
                 }
@@ -140,7 +234,7 @@
                   <span class="text-xs text-muted font-mono">+{{ entry[1].length - 10 }} mais</span>
                 }
               </div>
-            </div>
+            </button>
           }
         </div>
       } @else {
@@ -150,35 +244,36 @@
       }
     </section>
 
-    <!-- 4. Pontes -->
+    <!-- 5. Pontes / Arestas -->
     <section class="space-y-4">
-      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Pontes</h2>
+      <h2 class="font-bold text-xl border-b-[3px] border-ink pb-2">Pontes e Arestas</h2>
 
       @if (pontesEntries().length) {
         <div class="space-y-6">
           @for (entry of pontesEntries(); track entry[0]) {
             <div class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 nb-themed">
-              <div class="flex items-center gap-3 mb-4">
+              <div class="flex items-center gap-2 mb-4">
                 <h3 class="font-bold text-base">{{ pontesLabel(entry[0]) }}</h3>
+                <app-info-hint [texto]="descricoes[entry[0]]" />
                 <span class="nb-border rounded-full px-2.5 py-0.5 text-xs font-mono font-bold bg-muted/10">
                   {{ entry[1].length }}
                 </span>
               </div>
               @if (entry[1].length) {
-                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  @for (par of entry[1].slice(0, 30); track $index) {
-                    <div class="nb-border rounded-[6px] px-3 py-2 text-sm font-mono bg-background flex items-center gap-2">
-                      <span class="truncate">{{ par[0] }}</span>
-                      <span class="text-muted">—</span>
-                      <span class="truncate">{{ par[1] }}</span>
-                    </div>
-                  }
-                  @if (entry[1].length > 30) {
-                    <p class="text-muted text-xs col-span-full">
-                      + {{ entry[1].length - 30 }} pontes adicionais
-                    </p>
-                  }
-                </div>
+                <cdk-virtual-scroll-viewport
+                  itemSize="44"
+                  class="nb-border rounded-[6px] bg-background"
+                  [style.height.px]="alturaLista(entry[1].length, 44, 360)"
+                >
+                  <div
+                    *cdkVirtualFor="let par of entry[1]"
+                    class="px-3 h-11 flex items-center gap-2 text-sm font-mono border-b border-ink/10"
+                  >
+                    <span class="truncate flex-1">{{ par[0] }}</span>
+                    <span class="text-muted">—</span>
+                    <span class="truncate flex-1 text-right">{{ par[1] }}</span>
+                  </div>
+                </cdk-virtual-scroll-viewport>
               } @else {
                 <p class="text-muted text-sm">Nenhuma ponte encontrada nesta categoria.</p>
               }
@@ -194,3 +289,46 @@
 
   }
 </div>
+
+<!-- Voltar ao topo -->
+@if (mostrarTopo()) {
+  <app-tooltip texto="Voltar ao topo" class="fixed bottom-5 right-5 z-[80]">
+    <button
+      (click)="voltarAoTopo()"
+      class="nb-border-3 nb-shadow nb-interactive bg-primary text-on-primary rounded-full w-12 h-12 flex items-center justify-center cursor-pointer"
+      style="animation: fadeInUp 0.2s ease-out both"
+      aria-label="Voltar ao topo"
+    >
+      <lucide-icon name="arrow-up" class="w-5 h-5" />
+    </button>
+  </app-tooltip>
+}
+
+<!-- Modal: usuários de uma comunidade (scroll virtual) -->
+<app-modal
+  [aberto]="!!comunidadeAberta()"
+  [titulo]="comunidadeAberta()?.titulo ?? ''"
+  [comRodape]="false"
+  (fechar)="comunidadeAberta.set(null)"
+>
+  @if (comunidadeAberta(); as comunidade) {
+    <p class="text-muted text-sm mb-3">
+      {{ comunidade.usuarios.length }} usuários nesta comunidade.
+    </p>
+    <cdk-virtual-scroll-viewport
+      #comunidadeViewport
+      itemSize="40"
+      [minBufferPx]="400"
+      [maxBufferPx]="1200"
+      class="nb-border rounded-[6px] bg-background block overflow-auto overscroll-contain"
+      [style.height.px]="alturaModalComunidade(comunidade.usuarios.length)"
+    >
+      <div
+        *cdkVirtualFor="let u of comunidade.usuarios; trackBy: trackUsuario"
+        class="px-3 h-10 flex items-center text-sm font-mono border-b border-ink/10"
+      >
+        {{ u }}
+      </div>
+    </cdk-virtual-scroll-viewport>
+  }
+</app-modal>

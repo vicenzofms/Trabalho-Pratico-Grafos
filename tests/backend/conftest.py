@@ -60,5 +60,5 @@ def caminho_cache(dir_dados) -> str:
 
 @pytest.fixture
 def client(dir_dados) -> TestClient:
-    app = criar_app(Settings(diretorio_dados=dir_dados, cors_origins="*"))
+    app = criar_app(Settings(diretorio_dados=dir_dados, cors_origins="*", github_tokens=""))
     return TestClient(app)

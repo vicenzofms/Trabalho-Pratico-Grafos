@@ -31,3 +31,11 @@ class GerenciadorMineracao(ABC):
     @abstractmethod
     def status_do_repo(self, repo: str) -> JobMineracao | None:
         """Último job conhecido de um repo (ou None) — usado para resolver o estado."""
+
+    @abstractmethod
+    def remover_job(self, repo: str) -> None:
+        """Esquece o job associado a um repo (ex.: ao excluir o repositório).
+
+        Evita um job órfão que faria o estado do repo ser resolvido como ERRO ou
+        MINERANDO indevidamente caso um repo de mesmo nome volte a existir.
+        """

@@ -36,8 +36,8 @@
 }
 
 .dark {
-  --bg: #0A0A0A;
-  --surface: #161618;
+  --bg: #18181B;
+  --surface: #232328;
   --fg: #FAFAFA;
   --muted: #A1A1AA;
   --primary:   #2D5BFF;
@@ -98,8 +98,16 @@
   .nb-shadow-sm { box-shadow: 2px 2px 0 0 var(--ink); }
   .nb-shadow-lg { box-shadow: 6px 6px 0 0 var(--ink); }
 
+  /* Sombra que segue a cor da borda colorida (via --shadow-color); cai em --ink se não definida. */
+  .nb-shadow-color { box-shadow: 4px 4px 0 0 var(--shadow-color, var(--ink)); }
+
   .nb-border   { border: 2px solid var(--ink); }
   .nb-border-3 { border: 3px solid var(--ink); }
+
+  .dark .community-user-chip {
+    border-color: #27272a;
+    color: #d4d4d8;
+  }
 
   .nb-themed {
     transition: background-color .25s var(--ease-out),
@@ -110,13 +118,60 @@
   .nb-interactive {
     transition: transform .15s var(--ease-out), box-shadow .15s var(--ease-out);
   }
-  .nb-interactive:hover  { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--ink); }
-  .nb-interactive:active { transform: translate(4px, 4px);  box-shadow: 0 0 0 0 var(--ink); }
+  .nb-interactive:hover  { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--shadow-color, var(--ink)); }
+  .nb-interactive:active { transform: translate(4px, 4px);  box-shadow: 0 0 0 0 var(--shadow-color, var(--ink)); }
 
   :where(a, button, [tabindex]):focus-visible {
     outline: 3px solid var(--primary);
     outline-offset: 2px;
   }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) var(--surface);
+  }
+
+  *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--surface);
+    border-left: 2px solid var(--ink);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary);
+  }
+}
+
+/* Animações globais (modal, FAB, confeti) */
+@keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modalPop {
+  from { opacity: 0; transform: translateY(16px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes modalPopOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(10px) scale(0.96); }
+}
+.modal-overlay-leave { animation: modalFadeOut 0.16s ease-in both !important; }
+.modal-panel-leave { animation: modalPopOut 0.16s ease-in both !important; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes confettiFly {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0); }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

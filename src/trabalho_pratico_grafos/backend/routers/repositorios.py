@@ -7,10 +7,14 @@ implementação real; estas rotas e os schemas ficam intactos.
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from ..dependencias import get_gerenciador_mineracao, get_repositorio_servico
+from ..dependencias import (
+    get_analise_servico,
+    get_gerenciador_mineracao,
+    get_repositorio_servico,
+)
 from ..mineracao import GerenciadorMineracao
 from ..schemas.repositorio import JobMineracao, RepositorioResumo
-from ..servicos import RepositorioServico
+from ..servicos import AnaliseServico, RepositorioServico
 
 router = APIRouter(prefix="/repositorios", tags=["repositorios"])
 
@@ -31,6 +35,19 @@ def obter_repositorio(
 ) -> RepositorioResumo:
     """Resumo + `estado`. Sempre responde 200 (estado AUSENTE se não houver cache)."""
     return servico.obter(f"{owner}/{repo}")
+
+
+@router.delete("/{owner}/{repo}", status_code=204)
+def excluir_repositorio(
+    owner: str,
+    repo: str,
+    servico: RepositorioServico = Depends(get_repositorio_servico),
+    analise: AnaliseServico = Depends(get_analise_servico),
+) -> None:
+    """Exclui o cache do repo (idempotente, 204; 409 se houver mineração ativa)."""
+    nome = f"{owner}/{repo}"
+    servico.remover(nome)  # 409 se estiver minerando
+    analise.invalidar(nome)  # limpa o cache de análise em memória
 
 
 # --- Mineração (Fase 6) — disparo assíncrono; stub responde 501 no modo leitura --

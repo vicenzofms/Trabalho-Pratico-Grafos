@@ -115,6 +115,19 @@ def test_atualizar_repo_ausente_conflita_409(client_fake):
     assert client_fake.post("/api/repositorios/fantasma/repo/atualizar").status_code == 409
 
 
+def test_excluir_durante_mineracao_conflita_409(dir_dados):
+    # Inicia (registra job "executando") sem rodar o BackgroundTask: repo MINERANDO.
+    fonte = FonteCache(dir_dados)
+    gerenciador = GerenciadorMineracaoReal(
+        fonte, ["fake"], criar_miner=lambda repo, tokens: _MineradorFake(repo, dir_dados)
+    )
+    servico = RepositorioServico(fonte, gerenciador)
+
+    gerenciador.iniciar("novo/repo")  # job ativo, ainda não executado
+    with pytest.raises(ConflitoMineracaoError):
+        servico.remover("novo/repo")
+
+
 def test_atualizar_repo_existente_regrava_o_cache(client_fake, caminho_cache):
     mtime_antes = os.path.getmtime(caminho_cache)
 

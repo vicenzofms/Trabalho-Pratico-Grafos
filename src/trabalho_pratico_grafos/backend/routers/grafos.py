@@ -7,7 +7,7 @@ visualização é feita inteiramente no GEPHI, a partir do CSV exportado aqui.
 import shutil
 import tempfile
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -24,10 +24,11 @@ router = APIRouter(prefix="/repositorios", tags=["grafos"])
 def resumir_grafos(
     owner: str,
     repo: str,
+    representacao: str = Query("matriz"),
     servico: GrafoServico = Depends(get_grafo_servico),
 ) -> list[GrafoResumo]:
     """Resumo dos 4 grafos (vértices, arestas, densidade)."""
-    return servico.resumir_todos(f"{owner}/{repo}")
+    return servico.resumir_todos(f"{owner}/{repo}", representacao)
 
 
 @router.get("/{owner}/{repo}/grafos/{tipo}", response_model=GrafoResumo)
@@ -35,10 +36,11 @@ def detalhar_grafo(
     owner: str,
     repo: str,
     tipo: str,
+    representacao: str = Query("matriz"),
     servico: GrafoServico = Depends(get_grafo_servico),
 ) -> GrafoResumo:
     """Detalhe de um grafo (tipo inválido → 422)."""
-    return servico.resumir(f"{owner}/{repo}", tipo)
+    return servico.resumir(f"{owner}/{repo}", tipo, representacao)
 
 
 @router.get("/{owner}/{repo}/grafos/{tipo}/gephi")
@@ -46,10 +48,11 @@ def baixar_gephi(
     owner: str,
     repo: str,
     tipo: str,
+    representacao: str = Query("matriz"),
     servico: GrafoServico = Depends(get_grafo_servico),
 ) -> FileResponse:
     """Baixa o CSV de arestas no formato GEPHI."""
-    grafo = servico.construir(f"{owner}/{repo}", tipo)
+    grafo = servico.construir(f"{owner}/{repo}", tipo, representacao)
     nome = f"{owner}_{repo}_{tipo}"
     # Gera num diretório temporário e o remove depois que a resposta é enviada,
     # para não acumular arquivos em data/gephi a cada download.

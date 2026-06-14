@@ -9,6 +9,8 @@ export interface RepositorioResumo {
 
 export type TipoGrafo = 'integrado' | 'comentarios' | 'fechamento' | 'prs';
 
+export type TipoRepresentacao = 'matriz' | 'lista';
+
 export interface GrafoResumo {
   tipo: TipoGrafo;
   vertices: number;
@@ -21,11 +23,25 @@ export interface ItemRanking {
   valor: number;
 }
 
+export interface GrauUsuario {
+  entrada: number;
+  saida: number;
+}
+
+export interface ItemArestaPeso {
+  origem: string;
+  destino: string;
+  peso: number;
+}
+
 export interface RelatorioAnalise {
-  densidade: number;
-  assortatividade: number;
-  modularidade: number;
+  densidade: number | null;
+  clustering: number | null;
+  assortatividade: number | null;
+  modularidade: number | null;
   centralidades: Record<string, ItemRanking[]>;
+  graus: Record<string, GrauUsuario>;
+  arestas_mais_pesadas: ItemArestaPeso[];
   comunidades: Record<string, string[]>;
   pontes: Record<string, [string, string][]>;
 }

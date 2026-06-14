@@ -7,6 +7,7 @@ import {
   RelatorioAnalise,
   RepositorioResumo,
   TipoGrafo,
+  TipoRepresentacao,
 } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -18,16 +19,29 @@ export class Api {
     return this.http.get<RepositorioResumo[]>(`${this.base}/repositorios`);
   }
 
-  resumoGrafos(owner: string, repo: string) {
-    return this.http.get<GrafoResumo[]>(`${this.base}/repositorios/${owner}/${repo}/grafos`);
+  resumoGrafos(owner: string, repo: string, representacao: TipoRepresentacao = 'matriz') {
+    return this.http.get<GrafoResumo[]>(
+      `${this.base}/repositorios/${owner}/${repo}/grafos`,
+      { params: { representacao } }
+    );
   }
 
-  analise(owner: string, repo: string) {
-    return this.http.get<RelatorioAnalise>(`${this.base}/repositorios/${owner}/${repo}/analise`);
+  analise(owner: string, repo: string, tipo: TipoGrafo = 'integrado', representacao: TipoRepresentacao = 'matriz') {
+    return this.http.get<RelatorioAnalise>(
+      `${this.base}/repositorios/${owner}/${repo}/analise`,
+      { params: { tipo, representacao } }
+    );
   }
 
-  urlGephi(owner: string, repo: string, tipo: TipoGrafo) {
-    return `${this.base}/repositorios/${owner}/${repo}/grafos/${tipo}/gephi`;
+  urlGephi(owner: string, repo: string, tipo: TipoGrafo, representacao: TipoRepresentacao = 'matriz') {
+    return `${this.base}/repositorios/${owner}/${repo}/grafos/${tipo}/gephi?representacao=${representacao}`;
+  }
+
+  baixarGephi(owner: string, repo: string, tipo: TipoGrafo, representacao: TipoRepresentacao = 'matriz') {
+    return this.http.get(
+      `${this.base}/repositorios/${owner}/${repo}/grafos/${tipo}/gephi`,
+      { params: { representacao }, responseType: 'blob' }
+    );
   }
 
   minerar(owner: string, repo: string) {
@@ -43,5 +57,9 @@ export class Api {
       `${this.base}/repositorios/${owner}/${repo}/minerar/status`,
       { params: { job_id: jobId } }
     );
+  }
+
+  excluir(owner: string, repo: string) {
+    return this.http.delete<void>(`${this.base}/repositorios/${owner}/${repo}`);
   }
 }

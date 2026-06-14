@@ -6,6 +6,7 @@ testáveis. O serviço depende só da abstração `GrafoAbstrato` e da `FonteDeD
 """
 
 from trabalho_pratico_grafos.grafos import GrafoAbstrato, GrafoMatrizAdjacencia
+from trabalho_pratico_grafos.grafos.grafo_lista import GrafoListaAdjacencia
 
 from ..erros import RepositorioAusenteError, TipoGrafoInvalidoError
 from ..fontes import FonteDeDados
@@ -20,6 +21,14 @@ TIPOS_INTERACAO: dict[str, set[str]] = {
     "comentarios": {"comentario_issue", "comentario_pull_request"},
     "fechamento": {"fechamento_issue"},
     "prs": {"revisao_pull", "merge_pull"},
+}
+
+# representação interna do grafo escolhida pelo cliente (item: o front decide se o
+# backend usa lista ou matriz de adjacência). O resultado da análise é o mesmo; muda
+# só a estrutura de dados usada. Valor desconhecido cai no default (matriz).
+REPRESENTACOES: dict[str, type[GrafoAbstrato]] = {
+    "matriz": GrafoMatrizAdjacencia,
+    "lista": GrafoListaAdjacencia,
 }
 
 
@@ -38,11 +47,15 @@ def definir_rotulos(grafo: GrafoAbstrato, rotulos: list[str]) -> None:
         grafo.setRotuloVertice(i, rotulo)
 
 
-def construir_grafo_por_tipo(dados: dict, tipos: set[str]) -> GrafoAbstrato:
-    """Monta um `GrafoMatrizAdjacencia` filtrando as interações por `tipos`.
+def construir_grafo_por_tipo(
+    dados: dict, tipos: set[str], representacao: str = "matriz"
+) -> GrafoAbstrato:
+    """Monta o grafo filtrando as interações por `tipos`.
 
     `tipos` vazio inclui todas as interações. Cada usuário vira um vértice (na
     ordem em que aparece); arestas com o mesmo par são agregadas pelo peso.
+    `representacao` escolhe a estrutura interna (`matriz` ou `lista`); valor
+    desconhecido cai no default (matriz).
     """
     interacoes = (
         [i for i in dados["interacoes"] if i["tipo"] in tipos]
@@ -58,7 +71,8 @@ def construir_grafo_por_tipo(dados: dict, tipos: set[str]) -> GrafoAbstrato:
                 mapa_ids[nome] = len(usernames)
                 usernames.append(nome)
 
-    grafo = GrafoMatrizAdjacencia(len(usernames))
+    classe = REPRESENTACOES.get(representacao, GrafoMatrizAdjacencia)
+    grafo = classe(len(usernames))
     for interacao in interacoes:
         u = mapa_ids[interacao["origem"]]
         v = mapa_ids[interacao["destino"]]
@@ -77,15 +91,15 @@ class GrafoServico:
             raise RepositorioAusenteError(repo)
         return dados
 
-    def construir(self, repo: str, tipo: str) -> GrafoAbstrato:
+    def construir(self, repo: str, tipo: str, representacao: str = "matriz") -> GrafoAbstrato:
         if tipo not in TIPOS_INTERACAO:
             raise TipoGrafoInvalidoError(tipo, list(TIPOS_INTERACAO))
-        return construir_grafo_por_tipo(self._dados(repo), TIPOS_INTERACAO[tipo])
+        return construir_grafo_por_tipo(self._dados(repo), TIPOS_INTERACAO[tipo], representacao)
 
-    def construir_todos(self, repo: str) -> dict[str, GrafoAbstrato]:
+    def construir_todos(self, repo: str, representacao: str = "matriz") -> dict[str, GrafoAbstrato]:
         dados = self._dados(repo)
         return {
-            tipo: construir_grafo_por_tipo(dados, tipos)
+            tipo: construir_grafo_por_tipo(dados, tipos, representacao)
             for tipo, tipos in TIPOS_INTERACAO.items()
         }
 
@@ -97,8 +111,11 @@ class GrafoServico:
             densidade=densidade_opcional(grafo),  # None até a parte A entregar coesao.densidade
         )
 
-    def resumir(self, repo: str, tipo: str) -> GrafoResumo:
-        return self._resumir(tipo, self.construir(repo, tipo))
+    def resumir(self, repo: str, tipo: str, representacao: str = "matriz") -> GrafoResumo:
+        return self._resumir(tipo, self.construir(repo, tipo, representacao))
 
-    def resumir_todos(self, repo: str) -> list[GrafoResumo]:
-        return [self._resumir(tipo, grafo) for tipo, grafo in self.construir_todos(repo).items()]
+    def resumir_todos(self, repo: str, representacao: str = "matriz") -> list[GrafoResumo]:
+        return [
+            self._resumir(tipo, grafo)
+            for tipo, grafo in self.construir_todos(repo, representacao).items()
+        ]

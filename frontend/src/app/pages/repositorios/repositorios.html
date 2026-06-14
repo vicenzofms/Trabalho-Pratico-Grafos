@@ -10,9 +10,10 @@
       <div class="flex-1 min-w-64">
         <input
           type="text"
-          placeholder="owner/repo"
+          placeholder="owner/repo ou https://github.com/owner/repo"
           [value]="inputRepo()"
           (input)="inputRepo.set($any($event.target).value)"
+          (keydown.enter)="minerar()"
           [disabled]="!mineracaoHabilitada"
           class="w-full nb-border nb-shadow-sm rounded-[6px] px-4 py-2.5 bg-background text-foreground font-mono placeholder:text-muted focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -20,14 +21,15 @@
           <p class="text-danger text-sm mt-1">{{ inputErro() }}</p>
         }
       </div>
-      <button
-        (click)="minerar()"
-        [disabled]="!mineracaoHabilitada || !inputRepo().trim()"
-        class="nb-border-3 nb-shadow nb-interactive bg-primary text-on-primary font-bold px-6 py-2.5 rounded-[6px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-        [title]="!mineracaoHabilitada ? 'Backend em modo cache-only — mineração não disponível' : ''"
-      >
-        Minerar
-      </button>
+      <app-tooltip [texto]="!mineracaoHabilitada ? 'Backend em modo cache-only — mineração não disponível' : ''">
+        <button
+          (click)="minerar()"
+          [disabled]="!mineracaoHabilitada || !inputRepo().trim()"
+          class="nb-border-3 nb-shadow nb-interactive bg-primary text-on-primary font-bold px-6 py-2.5 rounded-[6px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+        >
+          Minerar
+        </button>
+      </app-tooltip>
     </div>
   </section>
 
@@ -49,24 +51,34 @@
       />
     } @else {
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+
+        <!-- Cards de repositórios novos em mineração (ainda sem cache) -->
+        @for (nome of cardsMineracaoNova(); track nome) {
+          <article class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 flex flex-col gap-4 nb-themed opacity-90">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-base break-all">{{ nome }}</h3>
+              <span class="nb-border rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide flex-shrink-0 bg-secondary text-on-secondary">
+                Minerando...
+                <span class="inline-block animate-spin ml-1">⟳</span>
+              </span>
+            </div>
+            <p class="text-muted text-sm">Minerando pela primeira vez — aguarde concluir.</p>
+          </article>
+        }
+
         @for (repo of repos.value(); track repo.nome) {
           <article
             class="nb-border-3 nb-shadow rounded-[6px] bg-surface p-5 flex flex-col gap-4 nb-themed"
-            [class.nb-interactive]="repo.estado === 'disponivel'"
-            [class.cursor-pointer]="repo.estado === 'disponivel'"
-            (click)="repo.estado === 'disponivel' && analisar(repo)"
-            (keydown.enter)="repo.estado === 'disponivel' && analisar(repo)"
-            [tabindex]="repo.estado === 'disponivel' ? 0 : -1"
-            [attr.role]="repo.estado === 'disponivel' ? 'button' : null"
+            [class.nb-interactive]="estadoEfetivo(repo) === 'disponivel'"
           >
             <div class="flex items-start justify-between gap-2">
               <h3 class="font-bold text-base break-all">{{ repo.nome }}</h3>
               <span
                 class="nb-border rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide flex-shrink-0"
-                [ngClass]="badgeClasse(repo.estado)"
+                [ngClass]="badgeClasse(estadoEfetivo(repo))"
               >
-                {{ badgeLabel(repo.estado) }}
-                @if (repo.estado === 'minerando' || estaMinrando(repo.nome)) {
+                {{ badgeLabel(estadoEfetivo(repo)) }}
+                @if (estadoEfetivo(repo) === 'minerando') {
                   <span class="inline-block animate-spin ml-1">⟳</span>
                 }
               </span>
@@ -93,22 +105,33 @@
               <p class="text-danger text-sm">Falha ao processar este repositório.</p>
             }
 
-            <div class="flex gap-2 mt-auto" (click)="$event.stopPropagation()">
+            <div class="flex gap-2 mt-auto">
               <button
                 (click)="analisar(repo)"
-                [disabled]="repo.estado !== 'disponivel'"
+                [disabled]="estadoEfetivo(repo) !== 'disponivel'"
                 class="flex-1 nb-border nb-shadow-sm nb-interactive bg-primary text-on-primary font-bold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
               >
                 Analisar
               </button>
-              <button
-                (click)="atualizar(repo)"
-                [disabled]="!mineracaoHabilitada || repo.estado !== 'disponivel'"
-                class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                [title]="'Atualizar dados'"
-              >
-                Atualizar
-              </button>
+              <app-tooltip texto="Atualizar dados (re-minera o repositório)">
+                <button
+                  (click)="atualizar(repo)"
+                  [disabled]="!mineracaoHabilitada || estadoEfetivo(repo) !== 'disponivel'"
+                  class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                >
+                  Atualizar
+                </button>
+              </app-tooltip>
+              <app-tooltip texto="Excluir repositório e cache">
+                <button
+                  (click)="excluir(repo)"
+                  [disabled]="minerandoRepo(repo.nome)"
+                  class="nb-border nb-shadow-sm nb-interactive bg-surface text-danger font-semibold px-3 py-2 rounded-[6px] cursor-pointer flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                  aria-label="Excluir repositório"
+                >
+                  <lucide-icon name="trash-2" class="w-4 h-4" />
+                </button>
+              </app-tooltip>
             </div>
           </article>
         }
@@ -116,3 +139,110 @@
     }
   </section>
 </div>
+
+<!-- Modal: escolha de representação ao Analisar -->
+<app-modal
+  [aberto]="!!modalAnalisar()"
+  titulo="Como o backend deve representar o grafo?"
+  (fechar)="modalAnalisar.set(null)"
+>
+  <p class="text-muted text-sm mb-4">
+    A escolha define a estrutura de dados usada nos 4 grafos de
+    <span class="font-mono font-semibold text-foreground">{{ modalAnalisar()?.nome }}</span>.
+  </p>
+  <div class="grid grid-cols-2 gap-3">
+    <button
+      (click)="representacaoEscolhida.set('matriz')"
+      class="nb-border-3 nb-shadow-sm rounded-[6px] p-4 text-left cursor-pointer nb-themed"
+      [class.bg-primary]="representacaoEscolhida() === 'matriz'"
+      [class.text-on-primary]="representacaoEscolhida() === 'matriz'"
+      [class.bg-surface]="representacaoEscolhida() !== 'matriz'"
+    >
+      <p class="font-bold">Matriz</p>
+      <p class="text-xs opacity-80 mt-1">Matriz de adjacência</p>
+    </button>
+    <button
+      (click)="representacaoEscolhida.set('lista')"
+      class="nb-border-3 nb-shadow-sm rounded-[6px] p-4 text-left cursor-pointer nb-themed"
+      [class.bg-primary]="representacaoEscolhida() === 'lista'"
+      [class.text-on-primary]="representacaoEscolhida() === 'lista'"
+      [class.bg-surface]="representacaoEscolhida() !== 'lista'"
+    >
+      <p class="font-bold">Lista</p>
+      <p class="text-xs opacity-80 mt-1">Lista de adjacência</p>
+    </button>
+  </div>
+
+  <div footer class="contents">
+    <button
+      (click)="modalAnalisar.set(null)"
+      class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="confirmarAnalise()"
+      class="nb-border-3 nb-shadow nb-interactive bg-primary text-on-primary font-bold px-5 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Analisar
+    </button>
+  </div>
+</app-modal>
+
+<!-- Modal: confirmação de atualização (remineração total) -->
+<app-modal
+  [aberto]="!!modalAtualizar()"
+  titulo="Atualizar repositório?"
+  (fechar)="modalAtualizar.set(null)"
+>
+  <p class="text-sm">
+    Atualizar
+    <span class="font-mono font-semibold">{{ modalAtualizar()?.nome }}</span>
+    vai <strong>reminerar o repositório por completo</strong> a partir do GitHub. Os dados atuais
+    serão substituídos ao final. Isso pode levar alguns minutos.
+  </p>
+
+  <div footer class="contents">
+    <button
+      (click)="modalAtualizar.set(null)"
+      class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="confirmarAtualizar()"
+      class="nb-border-3 nb-shadow nb-interactive bg-secondary text-on-secondary font-bold px-5 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Confirmar
+    </button>
+  </div>
+</app-modal>
+
+<!-- Modal: confirmação de exclusão (repositório + cache) -->
+<app-modal
+  [aberto]="!!modalExcluir()"
+  titulo="Excluir repositório?"
+  (fechar)="modalExcluir.set(null)"
+>
+  <p class="text-sm">
+    Excluir
+    <span class="font-mono font-semibold">{{ modalExcluir()?.nome }}</span>
+    remove <strong>permanentemente</strong> o repositório e seu cache local. Esta ação não pode ser
+    desfeita — para analisá-lo de novo será preciso minerar outra vez.
+  </p>
+
+  <div footer class="contents">
+    <button
+      (click)="modalExcluir.set(null)"
+      class="nb-border nb-shadow-sm nb-interactive bg-surface text-foreground font-semibold px-4 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Cancelar
+    </button>
+    <button
+      (click)="confirmarExcluir()"
+      class="nb-border-3 nb-shadow nb-interactive bg-danger text-white font-bold px-5 py-2 rounded-[6px] text-sm cursor-pointer"
+    >
+      Excluir
+    </button>
+  </div>
+</app-modal>

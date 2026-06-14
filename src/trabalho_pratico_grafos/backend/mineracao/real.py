@@ -61,7 +61,7 @@ class GerenciadorMineracaoReal(GerenciadorMineracao):
             self._exigir_tokens()
             if self._fonte.versao(repo) is not None:
                 raise ConflitoMineracaoError(f"Repositório '{repo}' já existe; use atualizar.")
-            self._exigir_sem_job_ativo(repo)
+            self._exigir_nenhuma_mineracao_global()
             return self._registrar(repo)
 
     def atualizar(self, repo: str) -> JobMineracao:
@@ -69,7 +69,7 @@ class GerenciadorMineracaoReal(GerenciadorMineracao):
             self._exigir_tokens()
             if self._fonte.versao(repo) is None:
                 raise ConflitoMineracaoError(f"Repositório '{repo}' não existe; use minerar.")
-            self._exigir_sem_job_ativo(repo)
+            self._exigir_nenhuma_mineracao_global()
             return self._registrar(repo)
 
     def executar_job(self, job_id: str) -> None:
@@ -97,15 +97,24 @@ class GerenciadorMineracaoReal(GerenciadorMineracao):
             job_id = self._job_por_repo.get(repo)
             return self._jobs.get(job_id) if job_id is not None else None
 
+    def remover_job(self, repo: str) -> None:
+        with self._lock:
+            job_id = self._job_por_repo.pop(repo, None)
+            if job_id is not None:
+                self._jobs.pop(job_id, None)
+
     # --- Helpers (assumem o lock já adquirido, salvo onde indicado) ---------
     def _exigir_tokens(self) -> None:
         if not self._tokens:
             raise TokensAusentesError()
 
-    def _exigir_sem_job_ativo(self, repo: str) -> None:
-        job_id = self._job_por_repo.get(repo)
-        if job_id is not None and self._jobs[job_id].estado in ESTADOS_ATIVOS:
-            raise ConflitoMineracaoError(f"Repositório '{repo}' já está sendo minerado.")
+    def _exigir_nenhuma_mineracao_global(self) -> None:
+        """Trava global: só uma mineração por vez (em qualquer repo)."""
+        for job in self._jobs.values():
+            if job.estado in ESTADOS_ATIVOS:
+                raise ConflitoMineracaoError(
+                    f"Já existe uma mineração em andamento ('{job.repo}'); aguarde concluir."
+                )
 
     def _registrar(self, repo: str) -> JobMineracao:
         job_id = uuid.uuid4().hex
