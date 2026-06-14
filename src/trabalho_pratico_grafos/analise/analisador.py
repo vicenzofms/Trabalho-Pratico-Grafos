@@ -6,8 +6,8 @@ from trabalho_pratico_grafos.analise.centralidade import (
     centralidade_grau, centralidade_proximidade,
     centralidade_intermediacao, pagerank, centralidade_autovetor
 )
-from trabalho_pratico_grafos.analise.comunidades import louvain
-from trabalho_pratico_grafos.analise.pontes import pontes_locais, arestas_intercomunidade
+from trabalho_pratico_grafos.analise.comunidades import louvain, modularidade
+from trabalho_pratico_grafos.analise.pontes import pontes_locais, pontes_classicas, arestas_intercomunidade
 
 
 class AnalisadorRede:
@@ -36,8 +36,10 @@ class AnalisadorRede:
                 "autovetor":     centralidade_autovetor(self._grafo),
             },
             "comunidades": part,
+            "modularidade": modularidade(self._grafo, part),
             "pontes": {
                 "locais":          pontes_locais(self._grafo),
+                "classicas": pontes_classicas(self._grafo),
                 "intercomunidade": arestas_intercomunidade(self._grafo, part),
             },
         }

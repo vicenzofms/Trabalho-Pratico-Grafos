@@ -60,5 +60,3 @@ print(f"PR Interações: {grafoPR_Interacoes.qntdVertices} vertices / {grafoPR_I
 print("---- Grafos ----")
 
 para_gephi(grafoGeral, "grafo_geral_discordjs")
-        
-

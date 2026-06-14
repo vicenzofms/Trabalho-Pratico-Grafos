@@ -22,14 +22,14 @@ def test_relatorio_completo_tem_a_estrutura_esperada():
     # Assert: chaves de primeiro nível
     assert set(relatorio.keys()) == {
         "densidade", "agrupamento", "assortatividade",
-        "centralidades", "comunidades", "pontes",
+        "centralidades", "comunidades", "modularidade", "pontes",
     }
     # subestrutura das centralidades
     assert set(relatorio["centralidades"].keys()) == {
         "grau", "proximidade", "intermediacao", "pagerank", "autovetor",
     }
     # subestrutura das pontes
-    assert set(relatorio["pontes"].keys()) == {"locais", "intercomunidade"}
+    assert set(relatorio["pontes"].keys()) == {"locais", "classicas", "intercomunidade"}
 
 
 def test_relatorio_completo_comunidades_um_rotulo_por_vertice():

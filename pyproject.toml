@@ -26,7 +26,13 @@ license-files = ["LICEN[CS]E*"]
 dev = [
     "pytest >= 8.0",
     "pytest-cov",
-    "PyGithub"
+    "PyGithub",
+    "httpx"
+]
+backend = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings"
 ]
 
 [project.urls]
