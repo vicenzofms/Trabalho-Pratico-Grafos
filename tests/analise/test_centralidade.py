@@ -5,6 +5,8 @@ from trabalho_pratico_grafos.analise.centralidade import (
     centralidade_grau,
     pagerank,
     centralidade_autovetor,
+    centralidade_proximidade,
+    centralidade_intermediacao,
 )
 
 # Para rodar: pytest tests/analise/test_centralidade.py -v
@@ -278,3 +280,103 @@ def test_autovetor_independe_da_implementacao_do_grafo(Classe):
     x = centralidade_autovetor(_triangulo_bidirecional(Classe))
 
     assert x == pytest.approx([1 / 3 ** 0.5, 1 / 3 ** 0.5, 1 / 3 ** 0.5])
+
+# ---------------------------------------------------------------------------
+# Testes da centralidade de proximidade (closeness: Wasserman-Faust)
+# ---------------------------------------------------------------------------
+
+
+def _caminho3(Classe=GrafoMatrizAdjacencia):
+    """Grafo dirigido: 0 -> 1 -> 2."""
+    g = Classe(3)
+    g.adicionarAresta(0, 1)
+    g.adicionarAresta(1, 2)
+    return g
+
+
+def test_proximidade_caminho_calcula_distancias():
+    # 0 alcança todos mais perto que 1; 2 não alcança ninguém.
+    c = centralidade_proximidade(_caminho3())
+
+    assert c == pytest.approx([2 / 3, 1 / 2, 0.0])
+
+
+def test_proximidade_grafo_completo_tem_mesma_centralidade():
+    # Todos os vértices possuem a mesma distância dos demais.
+    g = GrafoMatrizAdjacencia(3)
+
+    for u in range(3):
+        for v in range(3):
+            if u != v:
+                g.adicionarAresta(u, v)
+
+    c = centralidade_proximidade(g)
+
+    assert c[0] == pytest.approx(c[1])
+    assert c[1] == pytest.approx(c[2])
+
+
+def test_proximidade_vertice_isolado_e_zero():
+    # Vértice sem conexões não alcança nenhum outro.
+    g = GrafoMatrizAdjacencia(3)
+    g.adicionarAresta(0, 1)
+
+    c = centralidade_proximidade(g)
+
+    assert c[2] == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("Classe", [GrafoMatrizAdjacencia, GrafoListaAdjacencia])
+def test_proximidade_funciona_em_ambas_implementacoes(Classe):
+    c = centralidade_proximidade(_caminho3(Classe))
+
+    assert c == pytest.approx([2 / 3, 1 / 2, 0.0])
+
+
+# ---------------------------------------------------------------------------
+# Testes da centralidade de intermediação (algoritmo de Brandes)
+# ---------------------------------------------------------------------------
+
+
+def _diamante(Classe=GrafoMatrizAdjacencia):
+    """Grafo: 0->1, 0->2, 1->3, 2->3."""
+    g = Classe(4)
+    g.adicionarAresta(0, 1)
+    g.adicionarAresta(0, 2)
+    g.adicionarAresta(1, 3)
+    g.adicionarAresta(2, 3)
+    return g
+
+
+def test_intermediacao_caminho_tem_vertice_central():
+    # O único caminho mínimo entre 0 e 2 passa por 1.
+    c = centralidade_intermediacao(_caminho3())
+
+    assert c == pytest.approx([0.0, 0.5, 0.0])
+
+
+def test_intermediacao_diamante_divide_caminhos_minimos():
+    # 1 e 2 dividem igualmente os caminhos entre 0 e 3.
+    c = centralidade_intermediacao(_diamante())
+
+    assert c[1] == pytest.approx(1 / 12)
+    assert c[2] == pytest.approx(1 / 12)
+
+
+def test_intermediacao_grafo_sem_intermediarios_retorna_zero():
+    # Estrela de saída não possui vértices no meio de caminhos.
+    g = GrafoMatrizAdjacencia(4)
+    g.adicionarAresta(0, 1)
+    g.adicionarAresta(0, 2)
+    g.adicionarAresta(0, 3)
+
+    c = centralidade_intermediacao(g)
+
+    assert c == pytest.approx([0.0, 0.0, 0.0, 0.0])
+
+
+@pytest.mark.parametrize("Classe", [GrafoMatrizAdjacencia, GrafoListaAdjacencia])
+def test_intermediacao_funciona_em_ambas_implementacoes(Classe):
+    c = centralidade_intermediacao(_caminho3(Classe))
+
+    assert c == pytest.approx([0.0, 0.5, 0.0])
