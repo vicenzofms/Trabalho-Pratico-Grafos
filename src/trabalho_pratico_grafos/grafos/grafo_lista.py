@@ -5,6 +5,23 @@ class GrafoListaAdjacencia(GrafoAbstrato):
     def __init__(self, numeroVertices: int) :
         super().__init__(numeroVertices)
         self.lista = [{} for _ in range(self.qntdVertices)]
+        # Cache dos predecessores. getSucessores já é O(grau) (chaves do dict),
+        # mas getPredecessores teria que varrer todos os V vértices a cada chamada
+        # (O(V)) — e pagerank/autovetor/clustering chamam isso ~100·V vezes, o que
+        # torna a análise inviável em grafos grandes. A lista é construída sob
+        # demanda numa única varredura e qualquer mutação a invalida.
+        self._cachePredecessores: list[list[int]] | None = None
+
+    def _construirCachePredecessores(self) -> None:
+        """Varre a lista uma única vez montando os predecessores de cada vértice."""
+        predecessores: list[list[int]] = [[] for _ in range(self.qntdVertices)]
+        for u in range(self.qntdVertices):
+            for v in self.lista[u]:
+                predecessores[v].append(u)
+        self._cachePredecessores = predecessores
+
+    def _invalidarCachePredecessores(self) -> None:
+        self._cachePredecessores = None
 
     def setPesoAresta(self, u: int, v: int, peso: float): # Utilizado para incrementar pesos em arestas já detectadas anteriormente.
         self._validarAresta(u, v)
@@ -41,17 +58,16 @@ class GrafoListaAdjacencia(GrafoAbstrato):
 
     def getPredecessores(self, u: int) -> list[int]:
         self._validarIndices(u)
-        predecessores = []
-        for i in range(self.qntdVertices):
-            if u in self.lista[i]:
-                predecessores.append(i)
-
-        return predecessores
+        if self._cachePredecessores is None:
+            self._construirCachePredecessores()
+        return self._cachePredecessores[u]
 
 
     def _inserirAresta(self, u: int, v: int, peso: float) -> None:
          #Validação dos parâmetros realizada no Method
         self.lista[u][v] = peso
+        self._invalidarCachePredecessores()
 
     def _deletarAresta(self, u:int, v:int) -> None:
         self.lista[u].pop(v, None)
+        self._invalidarCachePredecessores()
