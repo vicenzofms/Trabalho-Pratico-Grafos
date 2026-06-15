@@ -97,6 +97,8 @@ export class Repositorio {
         this.repositorios.reload();
         if (s.estado === 'erro') {
           this.toast.erro(`Falha ao minerar ${chave}: ${s.detalhe ?? 'erro desconhecido'}`);
+        } else if (s.parcial) {
+          this.toast.alerta(`Mineração de ${chave} terminou, mas só foi possível obter dados parciais.`);
         } else {
           this.toast.sucesso(`Mineração de ${chave} concluída.`);
           this.confetti.disparar();

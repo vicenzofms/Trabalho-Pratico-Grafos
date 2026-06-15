@@ -19,6 +19,7 @@ ESTADOS_ATIVOS = {"pendente", "executando"}
 class _MineradorLike(Protocol):
     def executar(self, sleepTime: float = ..., reprocessar_pendencias: bool = ...) -> None: ...
     def salvarNoCache(self) -> None: ...
+    def houveDadosParciais(self) -> bool: ...
 
 
 def _criar_minerador(repo: str, tokens: list[str]) -> _MineradorLike:
@@ -68,9 +69,11 @@ class GerenciadorMineracao:
             return
         try:
             miner = self._criar_miner(job.repo, self._tokens)
-            miner.executar(reprocessar_pendencias=True)
-            miner.salvarNoCache()
-            self._definir_estado(job_id, "concluido", self._resumo(miner))
+            miner.executar(reprocessar_pendencias=True)  # falha obrigatória/repo inexistente levanta
+            miner.salvarNoCache()  # auto-protegido: não grava cache vazio
+            self._definir_estado(
+                job_id, "concluido", self._resumo(miner), parcial=miner.houveDadosParciais()
+            )
         except Exception as erro:  # noqa: BLE001 - qualquer falha vira estado de erro do job
             self._definir_estado(job_id, "erro", f"{type(erro).__name__}: {erro}")
 
@@ -114,10 +117,14 @@ class GerenciadorMineracao:
         self._job_por_repo[repo] = job_id
         return job
 
-    def _definir_estado(self, job_id: str, estado: str, detalhe: str | None) -> None:
+    def _definir_estado(
+        self, job_id: str, estado: str, detalhe: str | None, parcial: bool = False
+    ) -> None:
         with self._lock:
             anterior = self._jobs[job_id]
-            self._jobs[job_id] = anterior.model_copy(update={"estado": estado, "detalhe": detalhe})
+            self._jobs[job_id] = anterior.model_copy(
+                update={"estado": estado, "detalhe": detalhe, "parcial": parcial}
+            )
 
     @staticmethod
     def _resumo(miner: _MineradorLike) -> str:

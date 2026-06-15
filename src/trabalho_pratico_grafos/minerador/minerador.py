@@ -31,7 +31,10 @@ class Minerador:
     __clienteGithub: ClienteGithub
     __repositorio: str
 
-    __contadorInteracoesRegistradas: int 
+    __contadorInteracoesRegistradas: int
+
+    # Sinaliza que a coleta terminou com dados parciais (abort por tokens ou pendências sobrando)
+    __parcial: bool
 
     # Lista de Requests que ficaram pendentes
     __requestsPendentes: list[RequestPendente]
@@ -70,6 +73,7 @@ class Minerador:
         self.__requestsPendentes = []
         self.__interacoesLock = Lock()
         self.__pendenciasLock = Lock()
+        self.__parcial = False
     
     # --- Cache
     def __obterCaminhoCache(self) -> str:
@@ -96,6 +100,11 @@ class Minerador:
             return False
 
     def salvarNoCache(self) -> None:
+        # Não persiste cache vazio: sem interações não há dados úteis a guardar
+        # (uma interação sempre referencia usuários, então isto também cobre o mapa de usuários).
+        if len(self.__mapaInteracoes) <= 0:
+            print(colorir("Nada a salvar no cache (0 interações); cache não gravado.", "vermelho"))
+            return
         caminho = self.__obterCaminhoCache()
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
         try:
@@ -121,9 +130,9 @@ class Minerador:
         try:
             self.__clienteGithub.get(f"repos/{self.__repositorio}", obrigatorio=True, opts=MinerarOpcoes(desc="Verificando repositório...", cor="roxo"))
         except (ErroRequestObrigatoria, ErroTokensInutilizaveis) as e:
-            # falha obrigatória ou tokens inutilizáveis logo no começo: ainda não há dados a salvar
+            # falha obrigatória ou tokens inutilizáveis logo no começo: erro fatal, sem dados a salvar
             print(f"Erro ao acessar o repositório '{self.__repositorio}': {e}")
-            return
+            raise
 
         # informações básicas
         try:
@@ -134,9 +143,9 @@ class Minerador:
                 futureIssues.result()
                 futurePulls.result()
         except (ErroRequestObrigatoria, ErroTokensInutilizaveis) as e:
-            # listagem obrigatória falhou ou os tokens se esgotaram; ainda sem interações coletadas
+            # listagem obrigatória falhou ou os tokens se esgotaram; erro fatal, ainda sem interações coletadas
             print(f"Mineração Encerrada com Erro: {e}")
-            return
+            raise
 
         # mapear os autores no mapa de usuários
         self.__definirAutoresIssuesPRs()
@@ -170,6 +179,7 @@ class Minerador:
                     # condição terminal: sem tokens utilizáveis não adianta continuar
                     print(colorir(f"[ABORTADO]: {e} Preservando dados parciais...", 'vermelho'))
                     abortado = True
+                    self.__parcial = True
                     break
                 except Exception as e:
                     print(f"Ocorreu um erro em \"{desc}\": {type(e).__name__} {e}")
@@ -185,9 +195,11 @@ class Minerador:
                 except ErroTokensInutilizaveis as e:
                     # tokens se esgotaram durante o retry: aborta, mas mantém o já coletado
                     print(colorir(f"[ABORTADO]: {e} Preservando dados parciais...", 'vermelho'))
+                    self.__parcial = True
                 tempoTotal += (time.time() - inicio2)
         if len(self.__requestsPendentes) > 0: # após reprocessar (ou abortar) ainda há pendências
             print(colorir("[AVISO]: não foi possível completar todas as requests, EXISTEM dados parciais", 'vermelho'))
+            self.__parcial = True
 
         # ao terminar — ou ao abortar por tokens inutilizáveis — salva o que foi coletado
         if self.usar_cache:
@@ -213,6 +225,9 @@ class Minerador:
 
     def quantidadeUsuarios(self):
         return self.__mapaUsuarios.quantidadeDeUsuarios()
+
+    def houveDadosParciais(self) -> bool:
+        return self.__parcial
 
     def __adicionarInteracao(self, interacao: Interacao):
         with self.__interacoesLock:

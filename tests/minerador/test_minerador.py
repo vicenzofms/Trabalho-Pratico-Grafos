@@ -3,7 +3,7 @@ import os
 import pytest
 
 from trabalho_pratico_grafos.minerador.minerador import Interacao, Minerador, RequestPendente
-from trabalho_pratico_grafos.minerador.cliente_github import ResultadoPaginado, ErroTokensInutilizaveis
+from trabalho_pratico_grafos.minerador.cliente_github import ResultadoPaginado, ErroTokensInutilizaveis, ErroRequestObrigatoria
 
 # Para rodar escrever no terminal na raiz do projeto: pytest -v
 
@@ -747,4 +747,88 @@ def test_executar_aborta_e_preserva_parciais_quando_tokens_esgotam(tmp_path):
     assert minerador.quantidadeInteracoes() == 1
     assert minerador._Minerador__mapaInteracoes[("bob", "ana", "fechamento_issue")].peso == 1
     assert os.path.exists(caminho)
+    # e o aborto por tokens marcou a coleta como parcial
+    assert minerador.houveDadosParciais() is True
+
+
+# Cliente em que a verificação do repo ("repos/dono/repo") falha.
+class ClienteRepoIndisponivel:
+    def __init__(self, erro):
+        self.__erro = erro
+
+    def get(self, endpoint, params=None, obrigatorio=False, opts=None):
+        raise self.__erro
+
+    def getPaginadoCursor(self, endpoint, params=None, opts=None, obrigatorio=False):  # pragma: no cover
+        return []
+
+    def getPaginado(self, endpoint, params=None, opts=None, obrigatorio=False):  # pragma: no cover
+        return ResultadoPaginado([], [])
+
+    def getQuantidadeRequests(self):  # pragma: no cover
+        return 0
+
+
+@pytest.mark.parametrize(
+    "erro",
+    [ErroRequestObrigatoria("repo nao existe (fake)"), ErroTokensInutilizaveis("tokens (fake)")],
+)
+def test_executar_repo_indisponivel_levanta_e_nao_salva(tmp_path, erro):
+    # Arrange: a verificação obrigatória do repo falha logo no começo
+    caminho = str(tmp_path / "cache.json")
+    minerador = Minerador("dono/repo", ["token_exemplo"], usar_cache=True)
+    minerador._Minerador__obterCaminhoCache = lambda: caminho
+    minerador._Minerador__clienteGithub = ClienteRepoIndisponivel(erro)
+
+    # Act + Assert: erro fatal propaga e nada é salvo
+    with pytest.raises(type(erro)):
+        minerador.executar(sleepTime=0)
+    assert not os.path.exists(caminho)
+
+
+# Cliente em que o repo existe, mas a listagem obrigatória de issues/PRs falha.
+class ClienteListagemFalha:
+    def get(self, endpoint, params=None, obrigatorio=False, opts=None):
+        return {"full_name": endpoint}  # verificação do repo passa
+
+    def getPaginadoCursor(self, endpoint, params=None, opts=None, obrigatorio=False):
+        raise ErroRequestObrigatoria("listagem obrigatória falhou (fake)")
+
+    def getPaginado(self, endpoint, params=None, opts=None, obrigatorio=False):  # pragma: no cover
+        return ResultadoPaginado([], [])
+
+    def getQuantidadeRequests(self):  # pragma: no cover
+        return 0
+
+
+def test_executar_listagem_obrigatoria_falha_levanta_e_nao_salva(tmp_path):
+    # Arrange: repo existe, mas a listagem de issues/PRs (obrigatória) falha
+    caminho = str(tmp_path / "cache.json")
+    minerador = Minerador("dono/repo", ["token_exemplo"], usar_cache=True)
+    minerador._Minerador__obterCaminhoCache = lambda: caminho
+    minerador._Minerador__clienteGithub = ClienteListagemFalha()
+
+    # Act + Assert: erro fatal propaga e nada é salvo
+    with pytest.raises(ErroRequestObrigatoria):
+        minerador.executar(sleepTime=0)
+    assert not os.path.exists(caminho)
+
+
+def test_salvarNoCache_sem_interacoes_nao_grava_arquivo(tmp_path):
+    # Arrange: minerador sem nenhuma interação coletada
+    caminho = str(tmp_path / "cache.json")
+    minerador = Minerador("dono/repo", ["token_exemplo"])
+    minerador._Minerador__obterCaminhoCache = lambda: caminho
+
+    # Act
+    minerador.salvarNoCache()
+
+    # Assert: cache vazio não é persistido
+    assert not os.path.exists(caminho)
+
+
+def test_minerador_novo_nao_e_parcial():
+    # Arrange + Assert: por padrão, uma coleta nova não está marcada como parcial
+    minerador = Minerador("dono/repo", ["token_exemplo"])
+    assert minerador.houveDadosParciais() is False
 # Fim dos testes em executar()

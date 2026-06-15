@@ -35,3 +35,4 @@ class JobMineracao(BaseModel):
     repo: str
     estado: str  # "pendente" | "executando" | "concluido" | "erro"
     detalhe: str | None = None
+    parcial: bool = False  # True quando concluiu só com dados parciais (ex.: tokens esgotados no meio)

@@ -44,12 +44,21 @@ Contém a classe principal e as estruturas de dados das interações.
     mineração. Tenta o cache primeiro (se habilitado), verifica se o repositório
     existe, busca issues e PRs em paralelo, dispara a coleta de comentários,
     fechamentos, revisões e merges, e ao final reprocessa as pendências e salva o
-    cache. Se os tokens ficarem inutilizáveis no meio da coleta
-    (`ErroTokensInutilizaveis`), aborta de forma limpa e preserva tudo que já foi
-    registrado, salvando o resultado parcial no cache em vez de perdê-lo.
+    cache. Em caso de **falha fatal**, ou seja, repositório inexistente/inacessível
+    ou listagem obrigatória de issues/PRs que não pôde ser concluída, **levanta**
+    `ErroRequestObrigatoria` ou `ErroTokensInutilizaveis` e nada é salvo. Já se os
+    tokens ficarem inutilizáveis **no meio** da coleta específica
+    (`ErroTokensInutilizaveis`), aborta de forma limpa (sem levantar) e preserva
+    tudo que já foi registrado, salvando o resultado parcial no cache em vez de
+    perdê-lo; nesse caso `houveDadosParciais()` passa a retornar `True`.
+  - `houveDadosParciais()`: indica se a coleta terminou com dados parciais, seja
+    por abort de tokens no meio da mineração, seja por pendências que sobraram
+    após o reprocessamento. Útil para sinalizar a parcialidade a quem consome o
+    minerador.
   - `carregarDoCache()` e `salvarNoCache()`: leem e gravam o mapa de interações
     em `data/<owner>_<repo>.json`. Retornam ao estado anterior sem quebrar caso o
-    arquivo não exista ou esteja corrompido.
+    arquivo não exista ou esteja corrompido. `salvarNoCache()` **não grava cache
+    vazio**: se não houver nenhuma interação coletada, nada é escrito em disco.
   - `__obterCaminhoCache()`: monta o caminho do arquivo de cache a partir do nome
     do repositório.
   - `__buscarIssues()` e `__buscarPullRequests()`: buscam, com paginação por

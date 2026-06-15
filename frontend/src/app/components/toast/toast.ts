@@ -8,7 +8,7 @@ import { ToastService } from '../../services/toast';
   standalone: true,
   imports: [NgClass, LucideAngularModule],
   template: `
-    <div class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-[min(92vw,22rem)]">
+    <div class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-[min(92vw,24rem)]">
       @for (t of toast.toasts(); track t.id) {
         <div
           class="nb-border-3 nb-shadow rounded-[6px] p-4 flex items-start gap-3 nb-themed"
@@ -17,7 +17,7 @@ import { ToastService } from '../../services/toast';
           role="alert"
         >
           <lucide-icon [name]="icone(t.tipo)" class="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <p class="flex-1 text-sm font-semibold break-words">{{ t.mensagem }}</p>
+          <p class="flex-1 min-w-0 text-sm font-semibold break-words [overflow-wrap:anywhere]">{{ t.mensagem }}</p>
           <button
             (click)="toast.remover(t.id)"
             class="flex-shrink-0 opacity-80 hover:opacity-100 cursor-pointer"
@@ -44,6 +44,7 @@ export class ToastComponent {
     const map: Record<string, string> = {
       erro: 'bg-danger text-white',
       sucesso: 'bg-tertiary text-on-tertiary',
+      alerta: 'bg-warning text-ink',
       info: 'bg-surface text-foreground',
     };
     return map[tipo] ?? 'bg-surface text-foreground';
@@ -53,6 +54,7 @@ export class ToastComponent {
     const map: Record<string, string> = {
       erro: 'alert-circle',
       sucesso: 'info',
+      alerta: 'alert-triangle',
       info: 'info',
     };
     return map[tipo] ?? 'info';

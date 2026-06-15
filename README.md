@@ -110,16 +110,27 @@ Para uso cache-only **nenhuma variável é obrigatória** — os defaults bastam
 ## Minerando um repositório
 
 A mineração coleta as interações de um repositório e grava um cache JSON em
-`src/data/<owner>_<repo>.json`. Exemplo de uso direto do pacote `minerador`
-(veja também [`src/trabalho_pratico_grafos/scripts/builder.py`](src/trabalho_pratico_grafos/scripts/builder.py)):
+`src/data/<owner>_<repo>.json`. Exemplo de uso direto do pacote `minerador`:
 
 ```python
 from trabalho_pratico_grafos.minerador import Minerador
+from trabalho_pratico_grafos.minerador.cliente_github import (
+    ErroRequestObrigatoria,
+    ErroTokensInutilizaveis,
+)
 
 # nome do repositório e lista de tokens do GitHub
 minerador = Minerador("discordjs/discord.js", ["SEU_TOKEN"], usar_cache=True)
-minerador.executar()
-dados = minerador.exportarDados()
+try:
+    minerador.executar()
+except (ErroRequestObrigatoria, ErroTokensInutilizaveis) as erro:
+    # falha fatal (repositório inexistente ou tokens inutilizáveis no início):
+    # a mineração é abortada e nada é salvo no cache
+    print(f"Mineração falhou: {erro}")
+else:
+    if minerador.houveDadosParciais():
+        print("Atenção: a coleta terminou com dados PARCIAIS.")
+    dados = minerador.exportarDados()
 ```
 
 > Não dê commit nos seus tokens.
@@ -145,8 +156,7 @@ pytest tests/backend -v
 │   ├── grafos/      # estrutura de dados de grafo (matriz e lista)
 │   ├── analise/     # métricas de redes complexas
 │   ├── gephi/       # exportação para o Gephi
-│   ├── backend/     # API HTTP (FastAPI)
-│   └── scripts/     # scripts auxiliares
+│   └── backend/     # API HTTP (FastAPI)
 ├── frontend/        # aplicação Angular
 ├── tests/           # testes (pytest)
 └── .env.example     # modelo de configuração do backend

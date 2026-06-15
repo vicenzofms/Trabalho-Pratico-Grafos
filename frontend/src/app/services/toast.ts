@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-export type ToastTipo = 'erro' | 'sucesso' | 'info';
+export type ToastTipo = 'erro' | 'sucesso' | 'alerta' | 'info';
 
 export interface Toast {
   id: number;
@@ -29,6 +29,10 @@ export class ToastService {
 
   sucesso(mensagem: string) {
     return this.push(mensagem, 'sucesso');
+  }
+
+  alerta(mensagem: string) {
+    return this.push(mensagem, 'alerta', 7000);
   }
 
   remover(id: number) {

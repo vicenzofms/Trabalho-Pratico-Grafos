@@ -64,4 +64,6 @@ export interface JobMineracao {
   repo: string;
   estado: 'pendente' | 'executando' | 'concluido' | 'erro';
   detalhe: string | null;
+  /** True quando a mineração concluiu, mas só com dados parciais (ex.: tokens esgotados no meio). */
+  parcial: boolean;
 }

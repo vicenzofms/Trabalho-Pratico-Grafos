@@ -53,6 +53,16 @@ class _MineradorFake:
     def quantidadeInteracoes(self) -> int:
         return len(INTERACOES_NOVAS)
 
+    def houveDadosParciais(self) -> bool:
+        return False
+
+
+class _MineradorParcial(_MineradorFake):
+    """Igual ao fake bem-sucedido, mas sinaliza que os dados são parciais."""
+
+    def houveDadosParciais(self) -> bool:
+        return True
+
 
 class _MineradorQuebrado:
     def executar(self, sleepTime: float = 0.8, reprocessar_pendencias: bool = True) -> None:
@@ -61,6 +71,9 @@ class _MineradorQuebrado:
     def salvarNoCache(self) -> None:  # pragma: no cover - nunca chega aqui
         pass
 
+    def houveDadosParciais(self) -> bool:  # pragma: no cover - nunca chega aqui
+        return False
+
 
 def _gerenciador(miner_cls):
     def criar(fonte, settings):
@@ -68,7 +81,7 @@ def _gerenciador(miner_cls):
             fonte,
             ["fake-token"],
             criar_miner=lambda repo, tokens: miner_cls(repo, settings.caminho_dados)
-            if miner_cls is _MineradorFake
+            if issubclass(miner_cls, _MineradorFake)
             else miner_cls(),
         )
 
@@ -99,6 +112,7 @@ def test_minerar_repo_novo_fluxo_completo(client_fake):
     status = client_fake.get(f"/api/repositorios/novo/repo/minerar/status?job_id={job['job_id']}")
     assert status.status_code == 200
     assert status.json()["estado"] == "concluido"
+    assert status.json()["parcial"] is False
 
     # repo agora está DISPONIVEL com os dados minerados
     resumo = client_fake.get("/api/repositorios/novo/repo").json()
@@ -140,7 +154,7 @@ def test_atualizar_repo_existente_regrava_o_cache(client_fake, caminho_cache):
     assert resumo["quantidade_interacoes"] == len(INTERACOES_NOVAS)
 
 
-def test_erro_na_mineracao_vira_estado_erro(client_quebrado):
+def test_erro_na_mineracao_vira_estado_erro(client_quebrado, dir_dados):
     resposta = client_quebrado.post("/api/repositorios/novo/repo/minerar")
     assert resposta.status_code == 202
     job_id = resposta.json()["job_id"]
@@ -151,6 +165,9 @@ def test_erro_na_mineracao_vira_estado_erro(client_quebrado):
 
     # o repo reflete ERRO no resumo
     assert client_quebrado.get("/api/repositorios/novo/repo").json()["estado"] == "erro"
+
+    # erro fatal: nenhum JSON (nem vazio) é gravado para o repo
+    assert not os.path.isfile(os.path.join(dir_dados, "novo_repo.json"))
 
 
 # --- Gerenciador (unidade, sem HTTP) ----------------------------------------
@@ -169,6 +186,20 @@ def test_estado_minerando_antes_de_executar_o_job(dir_dados):
     gerenciador.executar_job(job.job_id)
     assert gerenciador.status(job.job_id).estado == "concluido"
     assert servico.obter("novo/repo").estado == EstadoRepositorio.DISPONIVEL
+
+
+def test_dados_parciais_marcam_job_como_parcial(dir_dados):
+    fonte = FonteCache(dir_dados)
+    gerenciador = GerenciadorMineracao(
+        fonte, ["fake"], criar_miner=lambda repo, tokens: _MineradorParcial(repo, dir_dados)
+    )
+
+    job = gerenciador.iniciar("novo/repo")
+    gerenciador.executar_job(job.job_id)
+
+    final = gerenciador.status(job.job_id)
+    assert final.estado == "concluido"
+    assert final.parcial is True
 
 
 def test_disparo_com_job_em_andamento_conflita(dir_dados):
