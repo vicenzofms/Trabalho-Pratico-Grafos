@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import {
   GrafoResumo,
+  GrafoVisualizacao,
   JobMineracao,
   RelatorioAnalise,
   RepositorioResumo,
@@ -30,6 +31,13 @@ export class Api {
     return this.http.get<RelatorioAnalise>(
       `${this.base}/repositorios/${owner}/${repo}/analise`,
       { params: { tipo, representacao } }
+    );
+  }
+
+  visualizarGrafo(owner: string, repo: string, tipo: TipoGrafo, representacao: TipoRepresentacao = 'matriz') {
+    return this.http.get<GrafoVisualizacao>(
+      `${this.base}/repositorios/${owner}/${repo}/grafos/${tipo}/visualizacao`,
+      { params: { representacao } }
     );
   }
 

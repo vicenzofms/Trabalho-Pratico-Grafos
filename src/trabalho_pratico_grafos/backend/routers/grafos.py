@@ -1,7 +1,8 @@
-"""Rotas de grafos — resumo dos 4 grafos, detalhe e download GEPHI (Fase 3/5).
+"""Rotas de grafos — resumo dos 4 grafos, detalhe, visualização e download GEPHI.
 
-Não há rota de visualização (nós + arestas): o front não renderiza o grafo; a
-visualização é feita inteiramente no GEPHI, a partir do CSV exportado aqui.
+A rota `.../visualizacao` devolve a topologia (nós + arestas dirigidas) em JSON para
+o front renderizar o grafo com vis.js. O CSV do GEPHI continua disponível para a
+análise externa no próprio GEPHI.
 """
 
 import shutil
@@ -14,7 +15,7 @@ from starlette.background import BackgroundTask
 from trabalho_pratico_grafos.gephi.gephi import para_gephi
 
 from ..dependencias import get_grafo_servico
-from ..schemas.grafo import GrafoResumo
+from ..schemas.grafo import GrafoResumo, GrafoVisualizacao
 from ..servicos import GrafoServico
 
 router = APIRouter(prefix="/repositorios", tags=["grafos"])
@@ -41,6 +42,18 @@ def detalhar_grafo(
 ) -> GrafoResumo:
     """Detalhe de um grafo (tipo inválido → 422)."""
     return servico.resumir(f"{owner}/{repo}", tipo, representacao)
+
+
+@router.get("/{owner}/{repo}/grafos/{tipo}/visualizacao", response_model=GrafoVisualizacao)
+def visualizar_grafo(
+    owner: str,
+    repo: str,
+    tipo: str,
+    representacao: str = Query("matriz"),
+    servico: GrafoServico = Depends(get_grafo_servico),
+) -> GrafoVisualizacao:
+    """Topologia (nós + arestas dirigidas) para o front renderizar com vis.js."""
+    return servico.visualizar(f"{owner}/{repo}", tipo, representacao)
 
 
 @router.get("/{owner}/{repo}/grafos/{tipo}/gephi")

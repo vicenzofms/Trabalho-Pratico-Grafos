@@ -55,7 +55,7 @@ function atualizarLockBody() {
         tabindex="-1"
       >
         <div
-          class="nb-border-3 nb-shadow-lg rounded-[6px] bg-surface w-full max-w-lg max-h-[85vh] flex flex-col nb-themed"
+          [class]="'nb-border-3 nb-shadow-lg rounded-[6px] bg-surface w-full ' + largura() + ' max-h-[85vh] flex flex-col nb-themed'"
           style="animation: modalPop 0.22s var(--ease-out, ease-out) both"
           animate.leave="modal-panel-leave"
           (click)="$event.stopPropagation()"
@@ -91,6 +91,8 @@ export class Modal {
   aberto = input(false);
   titulo = input('');
   comRodape = input(true);
+  // largura máxima do painel (classe Tailwind); default preserva o tamanho atual.
+  largura = input('max-w-lg');
   fechar = output<void>();
 
   private travado = false;

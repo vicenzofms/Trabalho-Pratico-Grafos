@@ -1,5 +1,5 @@
 @startuml
-title Diagrama de classes e pacotes - backend e nucleo
+title Diagrama de classes e pacotes
 
 skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
@@ -30,7 +30,6 @@ package "grafos" {
     + getQuantidadeVertices(): int
     + getQuantidadeArestas(): int
     + setRotuloVertice(u: int, rotulo: str)
-    + getVerticePorRotulo(rotulo: str): int | None
     + getRotuloVertice(u: int)
     + getGrauEntrada(u)
     + getGrauSaida(u)
@@ -260,6 +259,7 @@ package "backend.servicos" {
     - _resumir(tipo: str, grafo: GrafoAbstrato): GrafoResumo
     + resumir(repo: str, tipo: str, representacao: str): GrafoResumo
     + resumir_todos(repo: str, representacao: str): list[GrafoResumo]
+    + visualizar(repo: str, tipo: str, representacao: str): dict
   }
 
   class analise_servico <<module>> {
@@ -288,6 +288,26 @@ package "backend.servicos" {
   }
 }
 
+package "backend.schemas" {
+  class GrafoVisualizacao <<schema>> {
+    + tipo: str
+    + nos: list[NoGrafo]
+    + arestas: list[ArestaGrafo]
+  }
+
+  class NoGrafo <<schema>> {
+    + id: str
+    + grau_entrada: int
+    + grau_saida: int
+  }
+
+  class ArestaGrafo <<schema>> {
+    + origem: str
+    + destino: str
+    + peso: float
+  }
+}
+
 package "backend.routers" {
   class RepositoriosRouter <<router>> {
     + listar_repositorios(servico): list[RepositorioResumo]
@@ -301,6 +321,7 @@ package "backend.routers" {
   class GrafosRouter <<router>> {
     + resumir_grafos(owner: str, repo: str, representacao: str, servico): list[GrafoResumo]
     + detalhar_grafo(owner: str, repo: str, tipo: str, representacao: str, servico): GrafoResumo
+    + visualizar_grafo(owner: str, repo: str, tipo: str, representacao: str, servico): GrafoVisualizacao
     + baixar_gephi(owner: str, repo: str, tipo: str, representacao: str, servico): FileResponse
   }
 
@@ -412,6 +433,9 @@ pontes ..> comunidades
 gephi ..> GrafoAbstrato
 GrafosRouter ..> GrafoServico
 GrafosRouter ..> gephi
+GrafosRouter ..> GrafoVisualizacao : response_model
+GrafoVisualizacao *-- NoGrafo
+GrafoVisualizacao *-- ArestaGrafo
 AnaliseRouter ..> AnaliseServico
 RepositoriosRouter ..> RepositorioServico
 RepositoriosRouter ..> GerenciadorMineracao

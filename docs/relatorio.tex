@@ -23,6 +23,7 @@
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{tabularx}
+\usepackage{float}
 
 % --- estilo para trechos de código ---
 \lstset{
@@ -40,6 +41,12 @@
 \sloppy
 \hfuzz=1pt
 \hbadness=10000
+\raggedbottom
+\setlength{\textfloatsep}{4pt plus 1pt minus 1pt}
+\setlength{\floatsep}{4pt plus 1pt minus 1pt}
+\setlength{\intextsep}{4pt plus 1pt minus 1pt}
+\setlength{\abovecaptionskip}{2pt}
+\setlength{\belowcaptionskip}{0pt}
 
 \title{Análise da Rede de Colaboração de um Repositório \emph{Open Source}
        por meio de Teoria dos Grafos}
@@ -119,8 +126,10 @@ Seção~\ref{sec:arquitetura} apresenta a arquitetura da solução e a estrutura
 classes. A Seção~\ref{sec:mineracao} detalha a estratégia de coleta de dados. A
 Seção~\ref{sec:metricas} descreve os algoritmos e métricas implementados. A
 Seção~\ref{sec:testes} trata da estratégia de testes. A
-Seção~\ref{sec:resultados} discute os resultados obtidos e a
-Seção~\ref{sec:conclusao} conclui o trabalho.
+Seção~\ref{sec:resultados} discute os resultados obtidos. A
+Seção~\ref{sec:telas} apresenta as telas produzidas pela aplicação. A
+Seção~\ref{sec:responsabilidades} detalha a divisão de responsabilidades entre os
+membros e a Seção~\ref{sec:conclusao} conclui o trabalho.
 
 % =============================================================================
 \section{Escolha do Repositório}
@@ -130,7 +139,7 @@ O repositório escolhido para a análise foi o \texttt{wezterm/wezterm}
 (\url{https://github.com/wezterm/wezterm}), projeto \emph{open source} do
 emulador de terminal WezTerm. A escolha atende ao requisito de popularidade do
 enunciado: no momento da consulta, o projeto possuía aproximadamente
-\textbf{26.623 estrelas}, \textbf{1.499 forks} e \textbf{1.730 issues abertas},
+\textbf{26.623 estrelas}, \textbf{1.500 forks} e \textbf{1.474 issues abertas},
 além de histórico de desenvolvimento iniciado em fevereiro de 2018. O projeto é
 majoritariamente escrito em Rust e possui uma comunidade ativa em discussões,
 \emph{pull requests}, revisões e correções de problemas.
@@ -230,7 +239,7 @@ análise crítica do código de terceiros, ficando logo abaixo. O comentário
 (peso 2) representa participação na discussão: exige elaboração textual, mas não
 toca diretamente no código.
 
-\paragraph{Justificativa do peso~1 para o fechamento de \emph{issue}.}
+\paragraph{Justificativa do peso~1 para o fechamento de \emph{issue}:}
 De todas as interações que mapeamos, o fechamento de \emph{issue} é a que exige
 \textbf{menos ação por parte do usuário}. Diferentemente de um comentário, não
 requer a elaboração de um texto; e, diferentemente de uma revisão ou de um
@@ -238,7 +247,7 @@ requer a elaboração de um texto; e, diferentemente de uma revisão ou de um
 essencialmente, de uma ação de \emph{triagem} (resolver, organizar ou encerrar
 uma discussão), frequentemente realizada com um único clique. Ainda assim, o
 fechamento é uma interação \emph{significativa}: revela um vínculo real entre dois
-colaboradores (quem fechou agiu sobre a \emph{issue} aberta por outro) e, por
+colaboradores (quem agiu sobre a \emph{issue} aberta por outro usuário) e, por
 isso, não deve ser descartado. Optamos, então, por atribuir-lhe o \textbf{menor
 peso não nulo} (1): a interação é registrada e contribui para a rede, mas com a
 intensidade compatível com o baixo esforço e o caráter indireto que a
@@ -303,7 +312,7 @@ configura CORS, registra tratadores de erro e instancia os serviços compartilha
 em \texttt{app.state}: \texttt{RepositorioServico}, \texttt{GrafoServico},
 \texttt{AnaliseServico}, \texttt{FonteCache} e \texttt{GerenciadorMineracao}. As
 rotas são separadas em três grupos: \texttt{repositorios} (listagem, exclusão,
-mineração e status), \texttt{grafos} (resumos e exportação GEPHI) e
+mineração e status), \texttt{grafos} (resumos, visualização e exportação GEPHI) e
 \texttt{analise} (relatório completo e sub-recursos de métricas). O uso de
 injeção de dependência do FastAPI mantém os serviços testáveis sem acesso real à
 rede.
@@ -324,9 +333,19 @@ mineração. Nos cards de repositório, a aplicação também apresenta a data
 Além dos pacotes-núcleo, a versão atual possui uma aplicação web completa: um
 \emph{backend} FastAPI, responsável por expor a API HTTP, e um \emph{frontend}
 Angular, responsável pela demonstração da ferramenta e visualização das métricas.
-Os diagramas PlantUML produzidos para esta arquitetura estão em
-\texttt{docs/diagramas/classes\_pacotes\_backend.puml} e
+Os diagramas produzidos para esta arquitetura, gerados em PlantUML, são o diagrama
+de classes e pacotes (Figura~\ref{fig:diag-classes}) e o diagrama de sequência do
+fluxo de mineração e análise (Figura~\ref{fig:diag-sequencia}), cujas fontes estão
+em \texttt{docs/diagramas/classes\_pacotes.puml} e
 \texttt{docs/diagramas/sequencia\_mineracao\_metricas.puml}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.72\textwidth]{diagramas/diagrama_sequencia.png}
+\caption{Diagrama de sequência do fluxo de mineração e cálculo de métricas, da ação
+do usuário no frontend até a visualização dos resultados.}
+\label{fig:diag-sequencia}
+\end{figure}
 
 \subsection{Estrutura de classes dos grafos}
 \label{sec:classes}
@@ -350,21 +369,34 @@ exigido pelo enunciado, em três classes:
         \textbf{listas de adjacência} (dicionários por vértice).
 \end{itemize}
 
-O diagrama de classes e pacotes foi produzido em PlantUML no arquivo
-\texttt{docs/diagramas/classes\_pacotes\_backend.puml}. Ele inclui os pacotes
-\texttt{grafos}, \texttt{minerador}, \texttt{backend}, \texttt{analise} e
-\texttt{gephi}, sem incluir o \emph{frontend}, conforme definido pela equipe.
+O diagrama de classes e pacotes (Figura~\ref{fig:diag-classes}) foi produzido em
+PlantUML no arquivo \texttt{docs/diagramas/classes\_pacotes.puml}. Ele inclui os
+pacotes \texttt{grafos}, \texttt{minerador}, \texttt{backend}, \texttt{analise} e
+\texttt{gephi}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.80\textwidth,height=.62\textheight,keepaspectratio]{diagramas/classe_pacotes.pdf}
+\caption{Diagrama de classes e pacotes do backend e do núcleo, incluindo a
+estrutura de grafos, os serviços, os roteadores e os esquemas de resposta da API.}
+\label{fig:diag-classes}
+\end{figure}
 
 \subsection{API implementada}
 
-Toda a API obrigatória do enunciado foi implementada. As operações incluem
+A estrutura de grafos implementa integralmente uma API que inclui operações de
 consulta de cardinalidade (quantidade de vértices e arestas), manipulação de
 arestas (\texttt{adicionarAresta}, \texttt{removeAresta}, \texttt{existeAresta}),
 relações entre vértices e arestas (\texttt{isSucessor},
 \texttt{isPredecessor}, \texttt{isDivergente}, \texttt{isConvergente},
 \texttt{isIncidente}), graus (\texttt{getGrauEntrada}, \texttt{getGrauSaida}),
 pesos e rótulos de vértices e arestas, e propriedades globais
-(\texttt{isConexo}, \texttt{isVazio}, \texttt{isCompleto}).
+(\texttt{isConexo}, \texttt{isVazio}, \texttt{isCompleto}). Além dos métodos
+obrigatórios, a estrutura disponibiliza operações auxiliares não exigidas pela
+especificação, como \texttt{getSucessores} e \texttt{getPredecessores} (listas de
+vizinhos por sentido) e \texttt{getRotuloVertice} / \texttt{setRotuloVertice}
+(rótulos de vértices), utilizadas internamente pelas métricas e pela serialização
+dos resultados.
 
 As restrições do enunciado são garantidas pela classe abstrata: o grafo é
 \textbf{simples} (laços e arestas múltiplas são rejeitados), a inserção de
@@ -379,11 +411,10 @@ A API obrigatória do enunciado é especificada com nomes em inglês (por exempl
 os métodos em \textbf{português} (\texttt{getQuantidadeVertices},
 \texttt{existeAresta}, \texttt{adicionarAresta} etc.), mantendo a equivalência
 semântica um-para-um com a especificação. A decisão visa à consistência com o
-restante do código-base, integralmente escrito em português, e à legibilidade
-para a banca. A Tabela~\ref{tab:api} apresenta o mapeamento entre os nomes do
+restante do código-base, integralmente escrito em português. A Tabela~\ref{tab:api} apresenta o mapeamento entre os nomes do
 enunciado e os nomes adotados.
 
-\begin{table}[ht]
+\begin{table}[H]
 \centering
 \caption{Mapeamento da API: nomes do enunciado $\rightarrow$ nomes adotados.}
 \label{tab:api}
@@ -424,9 +455,14 @@ serialização e escrita em disco fica isolada em seu próprio módulo. O grafo 
 exportado como um arquivo \texttt{CSV} de arestas, um dos formatos aceitos
 pelo GEPHI, com as colunas \texttt{Source}, \texttt{Target}, \texttt{Weight}
 e \texttt{Type} (\texttt{Directed}), usando os rótulos (\emph{usernames}) dos
-vértices. O frontend visualiza métricas, rankings, comunidades e pontes; já a
-visualização espacial do grafo é feita externamente no GEPHI a partir do CSV
-baixado pela API.
+vértices. Além de métricas, rankings, comunidades e pontes, o frontend também
+renderiza o grafo de forma interativa com a biblioteca \texttt{vis.js}
+(\emph{vis-network}), consumindo uma rota de visualização que devolve os nós e as
+arestas em JSON. Essa biblioteca é usada apenas na camada visual: ela consome os
+dados do grafo preparados pelo backend, construídos a partir da biblioteca de
+grafos implementada pela equipe, e realiza somente a renderização interativa. A
+exportação em CSV permanece disponível para a análise espacial complementar no
+GEPHI.
 
 % =============================================================================
 \section{Estratégia de Coleta de Dados (Mineração)}
@@ -481,15 +517,15 @@ rotas \texttt{POST /api/repositorios/<owner>/<repo>/minerar} e
 imediatamente com um \texttt{JobMineracao} e executa o trabalho em
 \emph{background}. O frontend consulta periodicamente a rota de status até que o
 job seja concluído ou falhe. O fluxo completo, desde a ação do usuário até a
-visualização das métricas calculadas, está documentado no diagrama de sequência
-\texttt{docs/diagramas/sequencia\_mineracao\_metricas.puml}.
+visualização das métricas calculadas, está documentado no diagrama de sequência da
+Figura~\ref{fig:diag-sequencia}.
 
 % =============================================================================
 \section{Algoritmos e Métricas Implementados}
 \label{sec:metricas}
 
-Todas as métricas foram implementadas do zero, sem bibliotecas de grafos,
-utilizando apenas a biblioteca padrão de Python (por exemplo, \texttt{heapq}
+Todas as métricas foram implementadas do zero, utilizando apenas a biblioteca
+padrão de Python (por exemplo, \texttt{heapq}
 para a fila de prioridade do Dijkstra). O pacote \texttt{analise} centraliza, em
 \texttt{caminhos.py}, os utilitários de caminhos mínimos (BFS, Dijkstra e a
 travessia de Brandes) reaproveitados pelas métricas de distância.
@@ -505,8 +541,7 @@ travessia de Brandes) reaproveitados pelas métricas de distância.
         (BFS) e normalização de Wasserman--Faust para tratar a desconexão.
   \item \textbf{Intermediação} (\texttt{centralidade\_intermediacao}): identifica
         os colaboradores que atuam como \emph{pontes}, calculada pelo
-        \textbf{algoritmo de Brandes} (acumulação de dependências), evitando o
-        custo cúbico da definição ingênua.
+        \textbf{algoritmo de Brandes} (acumulação de dependências).
   \item \textbf{PageRank} (\texttt{pagerank}): mede influência considerando a
         importância de quem está conectado ao colaborador, via iteração de
         potência com fator de amortecimento $d = 0{,}85$ e tratamento de nós sem
@@ -534,9 +569,10 @@ travessia de Brandes) reaproveitados pelas métricas de distância.
 \begin{itemize}
   \item \textbf{Modularidade} (\texttt{modularidade}): função de avaliação que
         mede a qualidade de uma partição em comunidades.
-  \item \textbf{Detecção de comunidades} (\texttt{louvain}): algoritmo de Louvain
-        (movimento local + agregação) que maximiza a modularidade sobre o grafo
-        subjacente ponderado, identificando os grupos de colaboração.
+  \item \textbf{Detecção de comunidades} (\texttt{louvain}): algoritmo de Louvain,
+        uma heurística gulosa que busca maximizar a
+        modularidade sobre o grafo subjacente ponderado, identificando os grupos
+        de colaboração.
   \item \textbf{Pontes / \emph{bridging ties}}: três leituras complementares:
         \texttt{pontes\_locais} (arestas cujos extremos não têm vizinhos em
         comum), \texttt{arestas\_intercomunidade} (arestas entre comunidades
@@ -562,8 +598,7 @@ de análise.
 A qualidade do código é assegurada por uma suíte de \textbf{testes unitários}
 automatizados (\texttt{pytest}), abrangendo os quatro pacotes-núcleo. Cada
 métrica é validada contra \emph{grafos de referência} pequenos, cujos valores
-esperados foram calculados manualmente (já que bibliotecas de grafos são
-proibidas):
+esperados foram calculados manualmente:
 
 \begin{itemize}
   \item \textbf{Grafo estrela}, \textbf{grafo completo}, \textbf{dois triângulos
@@ -581,9 +616,8 @@ proibidas):
         garantir a mineração correta das informações sem erro.
 \end{itemize}
 
-No estado atual, a suíte conta com \textbf{287 testes automatizados} cobrindo
-estrutura de grafos, mineração, métricas, exportação GEPHI e backend. A execução
-mais recente da suíte resultou em todos os testes aprovados.
+No estado atual, a suíte conta com \textbf{281 testes automatizados} cobrindo
+estrutura de grafos, mineração, métricas, exportação GEPHI e backend.
 
 % =============================================================================
 \section{Resultados}
@@ -644,6 +678,215 @@ mais intensas, pois inclui revisões e \emph{merges}. A aplicação permite expl
 essas diferenças selecionando o tipo de grafo e comparando rankings de
 centralidade, comunidades e pontes no frontend.
 
+A Tabela~\ref{tab:coesao-resultados} apresenta as principais métricas de coesão
+e estrutura do grafo integrado. O coeficiente de agrupamento indica formação de
+agrupamentos locais, enquanto a assortatividade negativa sugere interação entre
+colaboradores com graus diferentes. O Louvain identificou 171 comunidades com
+modularidade 0,3418.
+
+\begin{table}[ht]
+\centering
+\caption{Métricas de coesão e estrutura do grafo integrado.}
+\label{tab:coesao-resultados}
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\begin{tabular}{lr}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Densidade & 0,00040 \\
+Coeficiente de agrupamento & 0,2830 \\
+Assortatividade de grau & -0,2358 \\
+Modularidade (Louvain) & 0,3418 \\
+Nº de comunidades & 171 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A distribuição das comunidades e as cinco maiores comunidades aparecem na
+Tabela~\ref{tab:comunidades-resultados}. As comunidades somam 4.462 membros; as
+maiores concentram parte relevante dos colaboradores e incluem mantenedores,
+bots e usuários recorrentes.
+
+\begin{table}[ht]
+\centering
+\caption{Resumo das comunidades detectadas pelo Louvain.}
+\label{tab:comunidades-resultados}
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\begin{tabularx}{\textwidth}{lr>{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Grupo} & \textbf{Valor} & \textbf{Detalhe} \\
+\midrule
+200+ membros & 3 & Distribuição por faixa de tamanho \\
+51 a 200 membros & 14 & Distribuição por faixa de tamanho \\
+6 a 50 membros & 28 & Distribuição por faixa de tamanho \\
+2 a 5 membros & 126 & Distribuição por faixa de tamanho \\
+Isoladas (1) & 0 & Distribuição por faixa de tamanho \\
+Comunidade 1 & 1.028 & wez, jsgf, imsnif, corbob \\
+Comunidade 2 & 817 & github-actions[bot], MelvDouc, kkanden, TraceBivens \\
+Comunidade 3 & 478 & bew, ipkiss42, spazm, mjec \\
+Comunidade 4 & 163 & Universal-Invariant, diegoroccia, RoastBeefer00, cmvanb \\
+Comunidade 5 & 128 & theEndBeta, aliaksandr-trush, ccaneke, TraceLD \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+As pontes também foram contabilizadas no grafo integrado: foram encontradas
+\textbf{3.036 pontes locais}, \textbf{2.190 pontes clássicas} e \textbf{3.117
+arestas intercomunidade}. Esses valores reforçam que parte expressiva da rede
+atua conectando grupos distintos de colaboração.
+
+A Tabela~\ref{tab:centralidades-resultados} resume os dez primeiros colocados em
+cada centralidade calculada sobre o grafo integrado. Os valores evidenciam a
+centralidade de \texttt{wez} em diferentes leituras, além da presença de bots e
+de colaboradores recorrentes em posições de destaque.
+
+\begin{table}[ht]
+\centering
+\caption{Top 10 de centralidades no grafo integrado.}
+\label{tab:centralidades-resultados}
+\tiny
+\renewcommand{\arraystretch}{0.82}
+\setlength{\tabcolsep}{2pt}
+\begin{tabularx}{\textwidth}{cXrXrXr}
+\toprule
+\# & \textbf{Entrada (ent/saí)} & \textbf{V.} & \textbf{Saída (ent/saí)} & \textbf{V.} & \textbf{PageRank} & \textbf{V.} \\
+\midrule
+1 & wez (179/1846) & 0,0401 & wez (179/1846) & 0,4138 & wez & 0,0199 \\
+2 & halfelf (45/0) & 0,0101 & github-actions[bot] (1/1629) & 0,3652 & prabirshrestha & 0,0071 \\
+3 & crabdancing (35/2) & 0,0078 & bew (25/465) & 0,1042 & hgaiser & 0,0056 \\
+4 & ShadowS0ng (30/0) & 0,0067 & loops (10/42) & 0,0094 & halfelf & 0,0043 \\
+5 & zw963 (28/3) & 0,0063 & MuhammedZakir (6/36) & 0,0081 & crabdancing & 0,0035 \\
+6 & prabirshrestha (27/6) & 0,0061 & no-response[bot] (0/32) & 0,0072 & ShadowS0ng & 0,0034 \\
+7 & nasyxx (26/2) & 0,0058 & ghost (19/29) & 0,0065 & onedr0p & 0,0032 \\
+8 & ModProg (26/8) & 0,0058 & SuperSandro2000 (15/27) & 0,0061 & jmbaur & 0,0031 \\
+9 & stevenxxiu (26/3) & 0,0058 & gegoune (6/27) & 0,0061 & grant0417 & 0,0030 \\
+10 & bew (25/465) & 0,0056 & valpackett (18/20) & 0,0045 & JoyceBabu & 0,0029 \\
+\midrule
+\# & \textbf{Autovetor} & \textbf{V.} & \textbf{Proximidade} & \textbf{V.} & \textbf{Intermediação} & \textbf{V.} \\
+\midrule
+1 & wez & 0,2059 & wez & 0,4340 & wez & 0,0977 \\
+2 & prabirshrestha & 0,0738 & github-actions[bot] & 0,4020 & bew & 0,0183 \\
+3 & ModProg & 0,0573 & bew & 0,2816 & prabirshrestha & 0,0122 \\
+4 & stevenxxiu & 0,0549 & MuhammedZakir & 0,2544 & github-actions[bot] & 0,0087 \\
+5 & hgaiser & 0,0514 & kaddkaka & 0,2543 & proski & 0,0078 \\
+6 & bew & 0,0514 & eugenesvk & 0,2535 & hgaiser & 0,0076 \\
+7 & joexue & 0,0503 & mborejdo & 0,2534 & alexherbo2 & 0,0055 \\
+8 & ghost & 0,0492 & tmccombs & 0,2532 & poetaman & 0,0053 \\
+9 & crabdancing & 0,0491 & happenslol & 0,2528 & xiangpeng2008 & 0,0042 \\
+10 & JoyceBabu & 0,0490 & follower & 0,2526 & JoyceBabu & 0,0039 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+A Tabela~\ref{tab:arestas-pesadas} lista as arestas de maior peso, isto é, os
+pares com maior intensidade acumulada de colaboração no grafo integrado.
+
+\begin{table}[ht]
+\centering
+\caption{Arestas mais pesadas do grafo integrado.}
+\label{tab:arestas-pesadas}
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\begin{tabular}{clc@{\hspace{1.0em}}clc}
+\toprule
+\# & \textbf{Origem $\rightarrow$ destino} & \textbf{Peso} & \# & \textbf{Origem $\rightarrow$ destino} & \textbf{Peso} \\
+\midrule
+1 & wez $\rightarrow$ bew & 673 & 6 & wez $\rightarrow$ jalil-salame & 247 \\
+2 & wez $\rightarrow$ Danielkonge & 340 & 7 & wez $\rightarrow$ Funami580 & 236 \\
+3 & wez $\rightarrow$ ghost & 322 & 8 & wez $\rightarrow$ mgpinf & 231 \\
+4 & wez $\rightarrow$ erf & 308 & 9 & wez $\rightarrow$ davidrios & 221 \\
+5 & wez $\rightarrow$ joexue & 252 & 10 & wez $\rightarrow$ valpackett & 212 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =============================================================================
+\section{Telas da Aplicação}
+\label{sec:telas}
+
+Esta seção reúne as telas produzidas pela aplicação web, ilustrando o fluxo de uso
+da ferramenta, da seleção do repositório à exploração das métricas e à visualização
+interativa do grafo. As capturas correspondem ao repositório \texttt{wezterm/wezterm}
+analisado na Seção~\ref{sec:resultados}.
+
+\subsection{Seleção de repositórios e visão geral}
+
+A Figura~\ref{fig:tela-repositorios} mostra a tela inicial: o usuário informa um
+repositório para minerar e acompanha os já minerados, cada um com a respectiva data
+de cache. A Figura~\ref{fig:tela-visao-geral} apresenta a visão geral dos quatro
+grafos do repositório selecionado, com o resumo do grafo integrado e, em cada
+\emph{card}, os botões de métricas, de exportação para o GEPHI e o botão
+\emph{Visualizar}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.62\textwidth]{figuras/tela1.png}
+\caption{Tela de repositórios: mineração de um novo repositório e listagem dos já
+minerados, com a data de cache de cada um.}
+\label{fig:tela-repositorios}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.62\textwidth]{figuras/tela2.png}
+\caption{Visão geral dos quatro grafos do repositório, com o resumo do grafo
+integrado e o botão \emph{Visualizar} em cada \emph{card}.}
+\label{fig:tela-visao-geral}
+\end{figure}
+
+\subsection{Visualização interativa do grafo}
+
+A Figura~\ref{fig:tela-visualizacao} mostra a visualização interativa do grafo em um
+modal, renderizada no frontend com a biblioteca \texttt{vis.js} (\emph{vis-network})
+a partir dos nós e arestas devolvidos pela rota de visualização da API.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.62\textwidth]{figuras/tela3.png}
+\caption{Visualização interativa do grafo no frontend, renderizada com a biblioteca
+\texttt{vis.js} a partir dos dados devolvidos pela API.}
+\label{fig:tela-visualizacao}
+\end{figure}
+
+\subsection{Métricas, comunidades e pontes}
+
+A tela de métricas consolida os resultados da análise. A
+Figura~\ref{fig:tela-metricas} traz o resumo da rede (densidade, coeficiente de
+agrupamento, assortatividade e modularidade); e a Figura~\ref{fig:tela-centralidades}
+apresenta o ranking de centralidade, com a métrica selecionável e o número de
+posições exibidas. A tela também possui uma tabela com o ranking das arestas por
+peso, destacando os pares de colaboradores com interação mais intensa. A detecção
+de comunidades aparece na Figura~\ref{fig:tela-comunidades}, com um
+\emph{card} por comunidade e a modularidade da partição. Abaixo também na tela de
+métricas, existem 3 tabelas mostrando as pontes locais, clássicas e arestas
+intercomunidade.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.62\textwidth]{figuras/tela4.png}
+\caption{Resumo da rede na tela de métricas: densidade, coeficiente de agrupamento,
+assortatividade e modularidade.}
+\label{fig:tela-metricas}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=.55\textwidth]{figuras/tela5.png}
+\caption{Ranking de centralidade, com a métrica selecionável (aqui, grau de entrada)
+e o número de posições exibidas.}
+\label{fig:tela-centralidades}
+\end{figure}
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=.55\textwidth]{figuras/tela7.png}
+\caption{Comunidades detectadas pelo algoritmo de Louvain, com a modularidade da
+partição e os membros de cada comunidade.}
+\label{fig:tela-comunidades}
+\end{figure}
+
+
 % =============================================================================
 \section{Responsabilidades dos Membros}
 \label{sec:responsabilidades}
@@ -652,7 +895,7 @@ As responsabilidades foram divididas por pacote, com colaboração entre os
 membros nas etapas de integração, ajustes finais e testes. A Tabela~\ref{tab:resp}
 resume a divisão principal.
 
-\begin{table}[ht]
+\begin{table}[!ht]
 \centering
 \caption{Responsabilidades dos membros do grupo.}
 \label{tab:resp}

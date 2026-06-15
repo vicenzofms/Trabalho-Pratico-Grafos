@@ -35,6 +35,18 @@ export interface ItemArestaPeso {
   peso: number;
 }
 
+export interface NoGrafo {
+  id: string;
+  grau_entrada: number;
+  grau_saida: number;
+}
+
+export interface GrafoVisualizacao {
+  tipo: TipoGrafo;
+  nos: NoGrafo[];
+  arestas: ItemArestaPeso[];
+}
+
 export interface RelatorioAnalise {
   densidade: number | null;
   clustering: number | null;

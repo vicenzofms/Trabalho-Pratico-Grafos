@@ -57,6 +57,55 @@ def test_grafo_de_repo_ausente_404(client):
     assert resposta.status_code == 404
 
 
+def test_visualizacao_grafo(client):
+    resposta = client.get("/api/repositorios/octo/demo/grafos/integrado/visualizacao")
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["tipo"] == "integrado"
+
+    ids = {no["id"] for no in corpo["nos"]}
+    assert ids == {"a", "b", "c", "d", "e"}  # um nó por usuário
+    assert len(corpo["arestas"]) == 9  # uma aresta por interação do fixture
+
+    # toda ponta de aresta pertence ao conjunto de nós; peso é numérico
+    for aresta in corpo["arestas"]:
+        assert set(aresta) == {"origem", "destino", "peso"}
+        assert aresta["origem"] in ids and aresta["destino"] in ids
+        assert isinstance(aresta["peso"], float)
+
+    # grafo dirigido: a->b existe (comentario_issue), b->a também — pares distintos
+    pares = {(a["origem"], a["destino"]) for a in corpo["arestas"]}
+    assert ("a", "b") in pares
+    assert ("c", "d") in pares  # fechamento_issue (sentido único)
+    assert ("d", "c") not in pares
+
+    # graus refletem o sentido das arestas
+    nos = {no["id"]: no for no in corpo["nos"]}
+    assert nos["c"]["grau_entrada"] >= 1 and nos["c"]["grau_saida"] >= 1
+
+
+def test_visualizacao_grafo_representacao_lista(client):
+    resposta = client.get(
+        "/api/repositorios/octo/demo/grafos/integrado/visualizacao",
+        params={"representacao": "lista"},
+    )
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert {no["id"] for no in corpo["nos"]} == {"a", "b", "c", "d", "e"}
+    assert len(corpo["arestas"]) == 9
+
+
+def test_visualizacao_tipo_invalido_422(client):
+    resposta = client.get("/api/repositorios/octo/demo/grafos/inexistente/visualizacao")
+    assert resposta.status_code == 422
+    assert "tipos_validos" in resposta.json()
+
+
+def test_visualizacao_repo_ausente_404(client):
+    resposta = client.get("/api/repositorios/fantasma/repo/grafos/integrado/visualizacao")
+    assert resposta.status_code == 404
+
+
 def test_download_gephi(client):
     resposta = client.get("/api/repositorios/octo/demo/grafos/integrado/gephi")
     assert resposta.status_code == 200

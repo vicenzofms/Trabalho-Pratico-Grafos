@@ -5,13 +5,15 @@ import { LucideAngularModule } from 'lucide-angular';
 import { Repositorio } from '../../services/repositorio';
 import { ToastService } from '../../services/toast';
 import { StatusView } from '../../components/status-view/status-view';
+import { Modal } from '../../components/modal/modal';
+import { GrafoVisualizador } from '../../components/grafo-visualizador/grafo-visualizador';
 import { Api } from '../../services/api';
-import { TipoGrafo } from '../../models/api.models';
+import { GrafoVisualizacao, TipoGrafo } from '../../models/api.models';
 
 @Component({
   selector: 'app-visao-geral',
   standalone: true,
-  imports: [StatusView, RouterLink, LucideAngularModule],
+  imports: [StatusView, RouterLink, LucideAngularModule, Modal, GrafoVisualizador],
   templateUrl: './visao-geral.html',
 })
 export class VisaoGeral implements OnInit {
@@ -23,6 +25,12 @@ export class VisaoGeral implements OnInit {
   grafos = this.repositorio.grafos;
 
   baixando = signal<Set<TipoGrafo>>(new Set());
+
+  // Visualização do grafo no modal (vis.js).
+  modalVisualizar = signal<TipoGrafo | null>(null);
+  dadosVis = signal<GrafoVisualizacao | null>(null);
+  carregandoVis = signal(false);
+  erroVis = signal(false);
 
   ngOnInit() {
     const { owner, repo } = this.route.snapshot.params;
@@ -75,6 +83,38 @@ export class VisaoGeral implements OnInit {
         return n;
       });
     }
+  }
+
+  async abrirVisualizacao(tipo: TipoGrafo) {
+    const sel = this.repositorio.selecionado();
+    if (!sel) return;
+    this.modalVisualizar.set(tipo);
+    this.dadosVis.set(null);
+    this.erroVis.set(false);
+    this.carregandoVis.set(true);
+    try {
+      const dados = await firstValueFrom(
+        this.api.visualizarGrafo(sel.owner, sel.repo, tipo, this.repositorio.representacao())
+      );
+      // ignora respostas obsoletas se o usuário trocou de grafo/fechou no meio
+      if (this.modalVisualizar() === tipo) this.dadosVis.set(dados);
+    } catch {
+      if (this.modalVisualizar() === tipo) this.erroVis.set(true);
+    } finally {
+      this.carregandoVis.set(false);
+    }
+  }
+
+  recarregarVis() {
+    const tipo = this.modalVisualizar();
+    if (tipo) this.abrirVisualizacao(tipo);
+  }
+
+  fecharVisualizacao() {
+    this.modalVisualizar.set(null);
+    this.dadosVis.set(null);
+    this.erroVis.set(false);
+    this.carregandoVis.set(false);
   }
 
   chipCorClasse(tipo: TipoGrafo) {

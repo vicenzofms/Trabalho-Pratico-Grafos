@@ -79,28 +79,66 @@
             </div>
           </div>
 
-          <div class="flex gap-2 mt-auto">
-            <a
-              [routerLink]="linkMetricas(grafo.tipo)"
-              class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-primary text-on-primary font-bold px-4 py-2.5 rounded-[6px] text-sm no-underline"
-            >
-              Métricas
-            </a>
+          <div class="flex flex-col gap-2 mt-auto">
+            <div class="flex gap-2">
+              <a
+                [routerLink]="linkMetricas(grafo.tipo)"
+                class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-primary text-on-primary font-bold px-4 py-2.5 rounded-[6px] text-sm no-underline"
+              >
+                Métricas
+              </a>
+              <button
+                (click)="baixarGephi(grafo.tipo)"
+                [disabled]="estaBaixando(grafo.tipo)"
+                class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-secondary text-on-secondary font-bold px-4 py-2.5 rounded-[6px] text-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait disabled:transform-none"
+              >
+                @if (estaBaixando(grafo.tipo)) {
+                  <lucide-icon name="loader-2" class="w-4 h-4 animate-spin" />
+                  Exportando…
+                } @else {
+                  ↓ Exportar GEPHI
+                }
+              </button>
+            </div>
             <button
-              (click)="baixarGephi(grafo.tipo)"
-              [disabled]="estaBaixando(grafo.tipo)"
-              class="flex-1 nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-secondary text-on-secondary font-bold px-4 py-2.5 rounded-[6px] text-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait disabled:transform-none"
+              (click)="abrirVisualizacao(grafo.tipo)"
+              class="w-full nb-border nb-shadow-sm nb-interactive flex items-center justify-center gap-2 bg-tertiary text-on-tertiary font-bold px-4 py-2.5 rounded-[6px] text-sm cursor-pointer"
             >
-              @if (estaBaixando(grafo.tipo)) {
-                <lucide-icon name="loader-2" class="w-4 h-4 animate-spin" />
-                Exportando…
-              } @else {
-                ↓ Exportar GEPHI
-              }
+              <lucide-icon name="network" class="w-4 h-4" />
+              Visualizar
             </button>
           </div>
         </article>
       }
     </div>
   }
+
+  <app-modal
+    [aberto]="!!modalVisualizar()"
+    [comRodape]="false"
+    [largura]="'max-w-4xl'"
+    [titulo]="'Visualização — ' + (modalVisualizar() ? tipoLabel(modalVisualizar()!) : '')"
+    (fechar)="fecharVisualizacao()"
+  >
+    @if (carregandoVis()) {
+      <div class="flex items-center justify-center gap-2 text-muted text-sm font-mono py-20">
+        <lucide-icon name="loader-2" class="w-5 h-5 animate-spin" />
+        Carregando grafo…
+      </div>
+    } @else if (erroVis()) {
+      <app-status-view
+        [error]="'Falha ao carregar a visualização do grafo.'"
+        (retry)="recarregarVis()"
+      />
+    } @else if (dadosVis(); as dados) {
+      @if (dados.nos.length) {
+        <app-grafo-visualizador [dados]="dados" />
+        <p class="text-muted text-xs font-mono mt-3">
+          {{ dados.nos.length }} vértices · {{ dados.arestas.length }} arestas
+        </p>
+      } @else {
+        <p class="text-muted text-sm py-20 text-center">Este grafo não possui vértices.</p>
+      }
+    }
+  </app-modal>
 </div>

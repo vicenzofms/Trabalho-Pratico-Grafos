@@ -1,10 +1,12 @@
 # Pacote `gephi`
 
 Exporta um grafo para um arquivo que pode ser aberto no GEPHI, o software usado
-para visualizar a rede. É a camada final do projeto: recebe um grafo já
-construído e analisado e o grava em disco em um dos formatos aceitos pelo GEPHI.
-A renderização e a exploração visual do grafo são feitas inteiramente no GEPHI, a
-partir do arquivo gerado aqui.
+para a análise visual aprofundada da rede. É a camada final do projeto: recebe um
+grafo já construído e analisado e o grava em disco em um dos formatos aceitos pelo
+GEPHI. O frontend renderiza o grafo de forma interativa com a biblioteca vis.js
+(vis-network), a partir da rota de visualização que devolve nós e arestas em JSON;
+a exportação gerada aqui permanece disponível para a exploração espacial
+complementar no GEPHI.
 
 ## Como funciona
 

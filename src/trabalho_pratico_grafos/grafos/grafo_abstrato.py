@@ -148,12 +148,6 @@ class GrafoAbstrato(ABC):
         self._validarIndices(u)
         self.rotulosVertices[u] = rotulo
 
-    def getVerticePorRotulo(self, rotulo: str) -> int | None:
-        # retorna o 1o vértice do grafo com esse rótulo
-        if rotulo in self.rotulosVertices:
-            return self.rotulosVertices.index(rotulo)
-        return None
-
     def getRotuloVertice(self, u: int):
         self._validarIndices(u)
         return self.rotulosVertices[u]

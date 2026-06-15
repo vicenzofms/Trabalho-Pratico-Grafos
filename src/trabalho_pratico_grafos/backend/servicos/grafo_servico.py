@@ -117,3 +117,34 @@ class GrafoServico:
             self._resumir(tipo, grafo)
             for tipo, grafo in self.construir_todos(repo, representacao).items()
         ]
+
+    def visualizar(self, repo: str, tipo: str, representacao: str = "matriz") -> dict:
+        """Topologia (nós + arestas dirigidas) do grafo para renderização no front.
+
+        Reusa `construir` (404 ausente / 422 tipo inválido vêm de graça) e serializa
+        no mesmo padrão de iteração usado em `analise_servico`/`gephi`. Os índices de
+        vértice viram o rótulo (username), id estável para o vis.js.
+        """
+        grafo = self.construir(repo, tipo, representacao)
+
+        def rotulo(i: int) -> str:
+            return grafo.getRotuloVertice(i) or str(i)
+
+        nos = [
+            {
+                "id": rotulo(i),
+                "grau_entrada": grafo.getGrauEntrada(i),
+                "grau_saida": grafo.getGrauSaida(i),
+            }
+            for i in range(grafo.getQuantidadeVertices())
+        ]
+        arestas = [
+            {
+                "origem": rotulo(u),
+                "destino": rotulo(v),
+                "peso": grafo.getPesoAresta(u, v),
+            }
+            for u in range(grafo.getQuantidadeVertices())
+            for v in grafo.getSucessores(u)
+        ]
+        return {"tipo": tipo, "nos": nos, "arestas": arestas}
