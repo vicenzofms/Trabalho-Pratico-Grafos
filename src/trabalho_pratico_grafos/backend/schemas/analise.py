@@ -34,8 +34,7 @@ class RelatorioAnalise(BaseModel):
     assortatividade: float | None = None
     modularidade: float | None = None
     # métrica -> ranking já ordenado (desc) e com username no lugar do índice.
-    # chaves no MVP: grau_entrada, grau_saida, autovetor, pagerank
-    # (proximidade/intermediacao entram quando a parte B entregar).
+    # chaves: grau_entrada, grau_saida, autovetor, pagerank, proximidade, intermediacao.
     centralidades: dict[str, list[ItemRanking]]
     # username -> contagens brutas de grau de entrada/saída (nº de arestas).
     graus: dict[str, GrauUsuario] = {}
