@@ -2,7 +2,7 @@
 
 Biblioteca em Python para análise de repositórios do GitHub utilizando grafos,
 acompanhada de uma API HTTP (FastAPI) e de um frontend (Angular) para
-visualização dos resultados.
+visualização dos resultados e do grafo.
 
 ## Sobre
 
@@ -21,7 +21,8 @@ O fluxo de dados percorre quatro pacotes, em camadas:
 | [`gephi`](src/trabalho_pratico_grafos/gephi/) | Exporta o grafo para o formato do Gephi. |
 
 Em cima desses pacotes, o **backend** (FastAPI) expõe os dados minerados, as
-métricas e a exportação via HTTP, e o **frontend** (Angular) consome essa API.
+métricas, a visualização do grafo e a exportação via HTTP, e o **frontend**
+(Angular) consome essa API e renderiza o grafo com a biblioteca vis.js.
 Todas as métricas usam apenas a biblioteca padrão de Python.
 
 ## Requisitos
@@ -59,10 +60,13 @@ pip install -e ".[dev]"
 ### 3. Rodar o backend (FastAPI)
 
 A camada HTTP **orquestra** os pacotes existentes e expõe os dados minerados, as
-métricas de rede e a exportação GEPHI.
+métricas de rede, a visualização do grafo (nós e arestas em JSON) e a exportação
+GEPHI.
 
-No MVP é **cache-only**: lê os repositórios já minerados em `src/data/`. As rotas
-de mineração existem, mas respondem `501` (ativadas na Fase 6).
+Por padrão (sem `GITHUB_TOKENS`), o backend é **cache-only**: lê os repositórios já
+minerados em `src/data/` e as rotas de mineração respondem `503`. Com
+`GITHUB_TOKENS` configurado, a mineração fica ativa: as rotas disparam a coleta em
+segundo plano (`202` com um `JobMineracao`), acompanhada pela rota de status.
 
 ```bash
 pip install -e ".[backend]"
@@ -92,11 +96,12 @@ O backend lê suas configurações de variáveis de ambiente (ou de um arquivo
 cp .env.example .env
 ```
 
-No MVP (cache-only) **nenhuma variável é obrigatória** — os defaults bastam.
+Para uso cache-only **nenhuma variável é obrigatória** — os defaults bastam;
+`GITHUB_TOKENS` só é necessário para minerar pela API.
 
 | Variável | Descrição | Default |
 | --- | --- | --- |
-| `GITHUB_TOKENS` | Tokens do GitHub separados por vírgula. Usados só na Fase 6 (mineração pela API). | vazio |
+| `GITHUB_TOKENS` | Tokens do GitHub separados por vírgula. Usados pela mineração (rotas `/minerar` e `/atualizar`); sem eles, essas rotas respondem `503`. | vazio |
 | `CORS_ORIGINS` | Origens permitidas no CORS (origem do front), separadas por vírgula. Ex.: `http://localhost:4200`. | `*` |
 | `DIRETORIO_DADOS` | Pasta dos caches JSON. Vazio = usa `src/data` (mesma do minerador). | `src/data` |
 
