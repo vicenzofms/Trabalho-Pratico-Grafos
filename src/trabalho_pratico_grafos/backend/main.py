@@ -18,13 +18,12 @@ from .erros import (
     ConflitoMineracaoError,
     JobNaoEncontradoError,
     MetricaInvalidaError,
-    MineracaoIndisponivelError,
     RepositorioAusenteError,
     TipoGrafoInvalidoError,
     TokensAusentesError,
 )
 from .fontes import FonteCache, FonteDeDados
-from .mineracao import GerenciadorMineracao, GerenciadorMineracaoReal
+from .mineracao import GerenciadorMineracao
 from .routers import analise, grafos, repositorios
 from .servicos import AnaliseServico, GrafoServico, RepositorioServico
 
@@ -34,7 +33,7 @@ CriarGerenciador = Callable[[FonteDeDados, Settings], GerenciadorMineracao]
 
 
 def _gerenciador_real(fonte: FonteDeDados, settings: Settings) -> GerenciadorMineracao:
-    return GerenciadorMineracaoReal(fonte, settings.tokens)
+    return GerenciadorMineracao(fonte, settings.tokens)
 
 
 def _registrar_erros(app: FastAPI) -> None:
@@ -57,10 +56,6 @@ def _registrar_erros(app: FastAPI) -> None:
             status_code=404,
             content={"detail": str(exc), "metricas_validas": exc.validas},
         )
-
-    @app.exception_handler(MineracaoIndisponivelError)
-    def _mineracao_indisponivel(request: Request, exc: MineracaoIndisponivelError) -> JSONResponse:
-        return JSONResponse(status_code=501, content={"detail": str(exc)})
 
     @app.exception_handler(ConflitoMineracaoError)
     def _conflito_mineracao(request: Request, exc: ConflitoMineracaoError) -> JSONResponse:

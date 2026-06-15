@@ -16,7 +16,7 @@ from trabalho_pratico_grafos.backend import criar_app
 from trabalho_pratico_grafos.backend.config import Settings
 from trabalho_pratico_grafos.backend.erros import ConflitoMineracaoError
 from trabalho_pratico_grafos.backend.fontes import FonteCache
-from trabalho_pratico_grafos.backend.mineracao import GerenciadorMineracaoReal
+from trabalho_pratico_grafos.backend.mineracao import GerenciadorMineracao
 from trabalho_pratico_grafos.backend.schemas.repositorio import EstadoRepositorio
 from trabalho_pratico_grafos.backend.servicos import RepositorioServico
 
@@ -64,7 +64,7 @@ class _MineradorQuebrado:
 
 def _gerenciador(miner_cls):
     def criar(fonte, settings):
-        return GerenciadorMineracaoReal(
+        return GerenciadorMineracao(
             fonte,
             ["fake-token"],
             criar_miner=lambda repo, tokens: miner_cls(repo, settings.caminho_dados)
@@ -115,6 +115,19 @@ def test_atualizar_repo_ausente_conflita_409(client_fake):
     assert client_fake.post("/api/repositorios/fantasma/repo/atualizar").status_code == 409
 
 
+def test_excluir_durante_mineracao_conflita_409(dir_dados):
+    # Inicia (registra job "executando") sem rodar o BackgroundTask: repo MINERANDO.
+    fonte = FonteCache(dir_dados)
+    gerenciador = GerenciadorMineracao(
+        fonte, ["fake"], criar_miner=lambda repo, tokens: _MineradorFake(repo, dir_dados)
+    )
+    servico = RepositorioServico(fonte, gerenciador)
+
+    gerenciador.iniciar("novo/repo")  # job ativo, ainda não executado
+    with pytest.raises(ConflitoMineracaoError):
+        servico.remover("novo/repo")
+
+
 def test_atualizar_repo_existente_regrava_o_cache(client_fake, caminho_cache):
     mtime_antes = os.path.getmtime(caminho_cache)
 
@@ -143,7 +156,7 @@ def test_erro_na_mineracao_vira_estado_erro(client_quebrado):
 # --- Gerenciador (unidade, sem HTTP) ----------------------------------------
 def test_estado_minerando_antes_de_executar_o_job(dir_dados):
     fonte = FonteCache(dir_dados)
-    gerenciador = GerenciadorMineracaoReal(
+    gerenciador = GerenciadorMineracao(
         fonte, ["fake"], criar_miner=lambda repo, tokens: _MineradorFake(repo, dir_dados)
     )
     servico = RepositorioServico(fonte, gerenciador)
@@ -160,7 +173,7 @@ def test_estado_minerando_antes_de_executar_o_job(dir_dados):
 
 def test_disparo_com_job_em_andamento_conflita(dir_dados):
     fonte = FonteCache(dir_dados)
-    gerenciador = GerenciadorMineracaoReal(
+    gerenciador = GerenciadorMineracao(
         fonte, ["fake"], criar_miner=lambda repo, tokens: _MineradorFake(repo, dir_dados)
     )
     gerenciador.iniciar("novo/repo")  # job ativo, ainda não executado

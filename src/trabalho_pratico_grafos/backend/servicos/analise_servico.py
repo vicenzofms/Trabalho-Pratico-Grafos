@@ -1,17 +1,9 @@
-"""Análise da rede (Fase 4) — o núcleo do backend.
+"""Análise da rede para o backend.
 
-Enquanto a fachada `AnalisadorRede` (parte A) não existe, este serviço usa um
-**adaptador de fallback** que chama diretamente as funções já entregues do pacote
-`analise` (`centralidade_*`, `pagerank`, `louvain`, `modularidade`, `pontes_*`).
-As funções ainda pendentes das partes A/B (proximidade, intermediação, densidade,
-clustering, assortatividade) são detectadas em tempo de import e ficam `None`
-até existirem — quando entrarem, populam sozinhas, sem mudar este arquivo.
-
-Responsabilidades:
-- cachear o relatório por `(repo, tipo, versão_do_json)` (costura 4: re-minerar
-  muda o mtime e invalida o cache sozinho);
-- converter os resultados indexados por id de vértice para `{username: valor}`,
-  montando rankings já ordenados (o front quer nomes, não índices).
+Este serviço orquestra as funções do pacote `analise` (`centralidade_*`,
+`pagerank`, `louvain`, `modularidade`, `pontes_*` e coesão), cacheia o relatório
+por `(repo, tipo, representacao, versão_do_json)` e converte resultados indexados
+por vértice para estruturas nomeadas por username, prontas para o frontend.
 """
 
 from __future__ import annotations
@@ -79,6 +71,12 @@ def _relatorio_indexado(grafo: GrafoAbstrato) -> dict:
         "autovetor": centralidade_autovetor(grafo),
         "pagerank": pagerank(grafo),
     }
+    # contagens brutas de arestas (in/out), por id de vértice — o front mostra na
+    # tabela de centralidades ao lado do valor da métrica selecionada.
+    graus = [
+        {"entrada": grafo.getGrauEntrada(i), "saida": grafo.getGrauSaida(i)}
+        for i in range(grafo.getQuantidadeVertices())
+    ]
     # parte B (entram quando existirem):
     proximidade = _lista_opcional(_centralidade_mod, "centralidade_proximidade", grafo)
     if proximidade is not None:
@@ -95,6 +93,7 @@ def _relatorio_indexado(grafo: GrafoAbstrato) -> dict:
         "clustering": _escalar_opcional(_coesao_mod, "coeficiente_agrupamento", grafo),
         "modularidade": modularidade(grafo, particao),
         "centralidades": centralidades,
+        "graus": graus,
         "comunidades": particao,
         "pontes": {
             "locais": pontes_locais(grafo),
@@ -115,6 +114,20 @@ def _ranking(grafo: GrafoAbstrato, valores: list[float]) -> list[dict]:
     return [{"username": username, "valor": valor} for username, valor in pares]
 
 
+def _ranking_arestas_por_peso(grafo: GrafoAbstrato) -> list[dict]:
+    arestas = [
+        {
+            "origem": _rotulo(grafo, u),
+            "destino": _rotulo(grafo, v),
+            "peso": grafo.getPesoAresta(u, v),
+        }
+        for u in range(grafo.getQuantidadeVertices())
+        for v in grafo.getSucessores(u)
+    ]
+    arestas.sort(key=lambda aresta: aresta["peso"], reverse=True)
+    return arestas
+
+
 def _agrupar_comunidades(grafo: GrafoAbstrato, particao: list[int]) -> dict[str, list[str]]:
     grupos: dict[str, list[str]] = {}
     for vertice, comunidade in enumerate(particao):
@@ -126,6 +139,10 @@ def _nomear_pares(grafo: GrafoAbstrato, pares: list[tuple[int, int]]) -> list[tu
     return [(_rotulo(grafo, u), _rotulo(grafo, v)) for u, v in pares]
 
 
+def _nomear_graus(grafo: GrafoAbstrato, graus: list[dict]) -> dict[str, dict]:
+    return {_rotulo(grafo, i): grau for i, grau in enumerate(graus)}
+
+
 def _relatorio_vazio() -> dict:
     """Relatório de um grafo sem vértices/arestas (ex.: tipo sem interações)."""
     return {
@@ -134,6 +151,8 @@ def _relatorio_vazio() -> dict:
         "clustering": None,
         "modularidade": None,
         "centralidades": {},
+        "graus": {},
+        "arestas_mais_pesadas": [],
         "comunidades": {},
         "pontes": {"locais": [], "classicas": [], "intercomunidade": []},
     }
@@ -157,6 +176,8 @@ def relatorio_do_grafo(grafo: GrafoAbstrato) -> dict:
             metrica: _ranking(grafo, valores)
             for metrica, valores in indexado["centralidades"].items()
         },
+        "graus": _nomear_graus(grafo, indexado["graus"]),
+        "arestas_mais_pesadas": _ranking_arestas_por_peso(grafo),
         "comunidades": _agrupar_comunidades(grafo, indexado["comunidades"]),
         "pontes": {
             categoria: _nomear_pares(grafo, pares)
@@ -169,16 +190,21 @@ class AnaliseServico:
     def __init__(self, grafo_servico: "GrafoServico", fonte: FonteDeDados) -> None:
         self._grafos = grafo_servico
         self._fonte = fonte
-        # cache em memória por (repo, tipo, versão do json) — costura 4.
-        self._cache: dict[tuple[str, str, float | None], dict] = {}
+        # cache em memória por (repo, tipo, representacao, versão do json) — costura 4.
+        self._cache: dict[tuple[str, str, str, float | None], dict] = {}
 
-    def relatorio(self, repo: str, tipo: str = "integrado") -> dict:
+    def relatorio(self, repo: str, tipo: str = "integrado", representacao: str = "matriz") -> dict:
         versao = self._fonte.versao(repo)
-        chave = (repo, tipo, versao)
+        chave = (repo, tipo, representacao, versao)
         if chave in self._cache:
             return self._cache[chave]
         # construir() valida o repo (404) e o tipo (422) antes de calcular.
-        grafo = self._grafos.construir(repo, tipo)
+        grafo = self._grafos.construir(repo, tipo, representacao)
         resultado = relatorio_do_grafo(grafo)
         self._cache[chave] = resultado
         return resultado
+
+    def invalidar(self, repo: str) -> None:
+        """Descarta as entradas em memória de um repo (ex.: após exclusão)."""
+        for chave in [c for c in self._cache if c[0] == repo]:
+            del self._cache[chave]

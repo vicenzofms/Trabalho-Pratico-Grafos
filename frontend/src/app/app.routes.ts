@@ -12,7 +12,7 @@ export const routes: Routes = [
       import('./pages/visao-geral/visao-geral').then(m => m.VisaoGeral),
   },
   {
-    path: ':owner/:repo/metricas',
+    path: ':owner/:repo/metricas/:tipo',
     loadComponent: () =>
       import('./pages/metricas/metricas').then(m => m.Metricas),
   },

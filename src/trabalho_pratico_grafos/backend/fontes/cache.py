@@ -77,3 +77,10 @@ class FonteCache(FonteDeDados):
         if not os.path.isfile(caminho):
             return None
         return os.path.getmtime(caminho)
+
+    def remover(self, repo: str) -> bool:
+        caminho = self._caminho(repo)
+        if not os.path.isfile(caminho):
+            return False
+        os.remove(caminho)
+        return True

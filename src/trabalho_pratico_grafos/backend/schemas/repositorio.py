@@ -1,6 +1,7 @@
 """Schemas de repositório — inclui o campo `estado` (costura 2 do plano)."""
 
 from enum import Enum
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -24,6 +25,7 @@ class RepositorioResumo(BaseModel):
     estado: EstadoRepositorio
     quantidade_usuarios: int | None = None  # None enquanto AUSENTE
     quantidade_interacoes: int | None = None
+    cacheado_em: datetime | None = None
 
 
 class JobMineracao(BaseModel):

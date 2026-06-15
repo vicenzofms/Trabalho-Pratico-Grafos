@@ -16,6 +16,7 @@ def test_listar_repositorios(client):
     assert repos[0]["estado"] == "disponivel"
     assert repos[0]["quantidade_usuarios"] == 5
     assert repos[0]["quantidade_interacoes"] == 9
+    assert repos[0]["cacheado_em"] is not None
 
 
 def test_resumo_repositorio_disponivel(client):
@@ -24,6 +25,7 @@ def test_resumo_repositorio_disponivel(client):
     corpo = resposta.json()
     assert corpo["estado"] == "disponivel"
     assert corpo["quantidade_usuarios"] == 5
+    assert corpo["cacheado_em"] is not None
 
 
 def test_resumo_repositorio_ausente_responde_200_com_estado(client):
@@ -31,6 +33,7 @@ def test_resumo_repositorio_ausente_responde_200_com_estado(client):
     resposta = client.get("/api/repositorios/fantasma/repo")
     assert resposta.status_code == 200
     assert resposta.json()["estado"] == "ausente"
+    assert resposta.json()["cacheado_em"] is None
 
 
 def test_resumo_dos_grafos(client):
@@ -76,6 +79,11 @@ def test_analise_completa(client):
     assert isinstance(corpo["densidade"], float)
     assert corpo["modularidade"] is not None
     assert corpo["comunidades"]
+    assert corpo["arestas_mais_pesadas"]
+    aresta = corpo["arestas_mais_pesadas"][0]
+    assert set(aresta) == {"origem", "destino", "peso"}
+    pesos = [item["peso"] for item in corpo["arestas_mais_pesadas"]]
+    assert pesos == sorted(pesos, reverse=True)
 
 
 def test_analise_subrecursos(client):
@@ -122,3 +130,27 @@ def test_mineracao_sem_token_indisponivel_e_status_404(client):
     assert client.post("/api/repositorios/octo/demo/atualizar").status_code == 503
     # status de um job inexistente -> 404
     assert client.get("/api/repositorios/octo/demo/minerar/status?job_id=abc").status_code == 404
+
+
+def test_excluir_repositorio_remove_cache(client, caminho_cache):
+    import os
+
+    # popula o cache de análise em memória para garantir que a exclusão o invalida
+    assert client.get("/api/repositorios/octo/demo/analise").status_code == 200
+
+    resposta = client.delete("/api/repositorios/octo/demo")
+    assert resposta.status_code == 204
+    assert not os.path.isfile(caminho_cache)
+
+    # repo some da lista e passa a reportar AUSENTE
+    assert client.get("/api/repositorios").json() == []
+    assert client.get("/api/repositorios/octo/demo").json()["estado"] == "ausente"
+    # leitura de análise de um repo ausente -> 404
+    assert client.get("/api/repositorios/octo/demo/analise").status_code == 404
+
+
+def test_excluir_repositorio_idempotente(client):
+    # excluir um repo inexistente (ou repetir a exclusão) ainda responde 204
+    assert client.delete("/api/repositorios/fantasma/repo").status_code == 204
+    assert client.delete("/api/repositorios/octo/demo").status_code == 204
+    assert client.delete("/api/repositorios/octo/demo").status_code == 204

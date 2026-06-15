@@ -1,0 +1,419 @@
+@startuml
+title Diagrama de classes e pacotes - backend e nucleo
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "grafos" {
+  abstract class GrafoAbstrato {
+    - qntdVertices: int
+    - qntdArestas: int
+    - rotulosVertices: list[str]
+    - grausEntrada: list[int]
+    - grausSaida: list[int]
+    - pesosVertices: list[float]
+    + __init__(numeroVertices)
+    + isVazio(): bool
+    + adicionarAresta(u: int, v: int, peso: float = 1.0)
+    + removeAresta(u: int, v: int): None
+    + isConexo(): bool
+    + isCompleto(): bool
+    + isIncidente(u: int, v: int, x: int): bool
+    + isConvergente(u1: int, v1: int, u2: int, v2: int): bool
+    + isDivergente(u1: int, v1: int, u2: int, v2: int): bool
+    - _validarAresta(u: int, v: int): None
+    - _validarIndices(*args: int): None
+    - _exigirAresta(u, v)
+    + setPesoVertice(u: int, peso: float)
+    + getPesoVertice(u: int)
+    + getQuantidadeVertices(): int
+    + getQuantidadeArestas(): int
+    + setRotuloVertice(u: int, rotulo: str)
+    + getVerticePorRotulo(rotulo: str): int | None
+    + getRotuloVertice(u: int)
+    + getGrauEntrada(u)
+    + getGrauSaida(u)
+    {abstract} + setPesoAresta(u: int, v: int, peso: float)
+    {abstract} + getPesoAresta(u: int, v: int): float
+    {abstract} + isSucessor(u: int, v: int): bool
+    {abstract} + isPredecessor(u: int, v: int): bool
+    {abstract} + getPredecessores(u: int): list[int]
+    {abstract} + getSucessores(u: int): list[int]
+    {abstract} - _inserirAresta(u: int, v: int, peso: float): None
+    {abstract} - _deletarAresta(u: int, v: int)
+    {abstract} + existeAresta(u: int, v: int): bool
+  }
+
+  class GrafoListaAdjacencia {
+    - lista: list[dict[int, float]]
+    - _cachePredecessores: list[list[int]]
+    + __init__(numeroVertices: int)
+    - _construirCachePredecessores(): None
+    - _invalidarCachePredecessores(): None
+    + setPesoAresta(u: int, v: int, peso: float)
+    + getPesoAresta(u: int, v: int): float
+    + existeAresta(u: int, v: int): bool
+    + isSucessor(u: int, v: int): bool
+    + isPredecessor(u: int, v: int): bool
+    + getSucessores(u: int): list[int]
+    + getPredecessores(u: int): list[int]
+    - _inserirAresta(u: int, v: int, peso: float): None
+    - _deletarAresta(u: int, v: int): None
+  }
+
+  class GrafoMatrizAdjacencia {
+    - matriz: list[array]
+    - _cacheSucessores: list[list[int]]
+    - _cachePredecessores: list[list[int]]
+    + __init__(numeroVertices: int)
+    - _construirCacheAdjacencia(): None
+    - _invalidarCacheAdjacencia(): None
+    + setPesoAresta(u: int, v: int, peso: float)
+    + getPesoAresta(u: int, v: int)
+    + existeAresta(u: int, v: int): bool
+    + isSucessor(u: int, v: int): bool
+    + isPredecessor(u: int, v: int): bool
+    + getPredecessores(u: int): list[int]
+    + getSucessores(u: int): list[int]
+    - _inserirAresta(u: int, v: int, peso: float): None
+    - _deletarAresta(u: int, v: int)
+  }
+}
+
+package "minerador" {
+  class Minerador {
+    - __urlBase: str
+    - __clienteGithub: ClienteGithub
+    - __repositorio: str
+    - __contadorInteracoesRegistradas: int
+    - __requestsPendentes: list[RequestPendente]
+    - __pullRequests: list[dict]
+    - __issues: list[dict]
+    - __autoresIssuesPRs: dict[str, str]
+    - __mapaUsuarios: MapaUsuarios
+    - __mapaInteracoes: dict
+    - __interacoesLock: Lock
+    - __pendenciasLock: Lock
+    + PESOS: dict[str, int]
+    + __init__(repositorio: str, tokens: list[str], usar_cache: bool = False)
+    - __obterCaminhoCache(): str
+    + carregarDoCache(): bool
+    + salvarNoCache(): None
+    + executar(sleepTime: float = 0.8, reprocessar_pendencias: bool = True)
+    + exibirInteracoes()
+    + quantidadeInteracoes()
+    + quantidadeInteracoesRegistradas()
+    + quantidadeUsuarios()
+    - __adicionarInteracao(interacao: Interacao)
+    - __adicionarPendencia(pendencia: RequestPendente)
+    + exibirUsuarios()
+    + exibirRelatorioTokens()
+    - __buscarPullRequests(sleepTime: float): None
+    - __buscarIssues(sleepTime: float): None
+    - __definirAutoresIssuesPRs(): None
+    - __minerarComentariosIssuesPR(sleepTime): None
+    - __minerarComentariosInlinePullRequest(sleepTime): None
+    - __minerarMergeDeUmPR(numeroPR: int, autorPR: str)
+    - __minerarReviewsDeUmPR(numeroPR: int, autorPR: str)
+    - __processarFechamentoIssues(): None
+    - __processarComentarioIssue(comentario: dict)
+    - __processarComentarioInlinePR(comentario: dict)
+    - __processarReview(review: dict, autorPR)
+    - __processarMerge(pull: dict, autorPR)
+    - __processarPendencias(sleepTime: float)
+    + exportarDados(): dict | None
+  }
+
+  class ClienteGithub {
+    - __FATOR_SLEEP_FALHA: float
+    - __tokens: list[TokenEstado]
+    - __urlBase: str
+    - __quantidadeRequests: int
+    - __contadorRequestsLock: Lock
+    - __tokenLock: Lock
+    + __init__(tokens: list[str], urlBase: str = "https://api.github.com")
+    - __getResponse(url: str, params: dict | None, obrigatorio: bool, opts: MinerarOpcoes | None): Response | None
+    + get(endpoint: str, params: dict | None, obrigatorio: bool, opts: MinerarOpcoes | None)
+    + getPaginado(endpoint: str, params: dict | None, opts: MinerarOpcoes | None, obrigatorio: bool): ResultadoPaginado
+    + getPaginadoCursor(endpoint: str, params, opts, obrigatorio): list[dict]
+    - __getToken(): TokenEstado
+    - __getHeader(token: str)
+    - __requestFalha(motivo: str, obrigatorio: bool)
+    + getQuantidadeRequests(): int
+    + exibirRelatorioTokens()
+  }
+
+  class MapaUsuarios {
+    - __usuarios: dict[str, int]
+    - __ids: list[str]
+    - __lock: Lock
+    + __init__(): None
+    + buscarOuRegistrar(username: str): int
+    + buscarNome(id: int): str
+    + quantidadeDeUsuarios(): int
+    + listarUsuarios(): None
+    + exportarUsuarios(): dict
+  }
+
+  class Interacao <<dataclass>> {
+    + origem: str
+    + destino: str
+    + peso: int
+    + tipo: str
+  }
+
+  class RequestPendente <<dataclass>> {
+    + endpoint: str
+    + tipo: TipoPendencia
+    + pagina: int | None
+    + autorPR: str | None
+    + numeroPR: int | None
+  }
+
+  class MinerarOpcoes <<dataclass>> {
+    + sleepTime: float
+    + desc: str
+    + cor: Cor
+  }
+
+  class ResultadoPaginado <<dataclass>> {
+    + itens: list[dict]
+    + paginasComFalha: list[int]
+  }
+
+  class TokenEstado <<dataclass>> {
+    + token: str
+    + usos: int
+    + invalido: bool
+    + bloqueadoAte: float
+  }
+
+  class ErroRequestObrigatoria <<exception>>
+  class ErroTokensInutilizaveis <<exception>>
+}
+
+package "backend.fontes" {
+  abstract class FonteDeDados {
+    {abstract} + listar(): list[str]
+    {abstract} + carregar(repo: str): dict | None
+    {abstract} + versao(repo: str): float | None
+    {abstract} + remover(repo: str): bool
+  }
+
+  class FonteCache {
+    - _diretorio: str
+    + __init__(diretorio: str): None
+    - _caminho(repo: str): str
+    + listar(): list[str]
+    + carregar(repo: str): dict | None
+    + versao(repo: str): float | None
+    + remover(repo: str): bool
+  }
+}
+
+package "backend.mineracao" {
+  class GerenciadorMineracao {
+    - _fonte: FonteDeDados
+    - _tokens: list[str]
+    - _criar_miner: Callable
+    - _jobs: dict[str, JobMineracao]
+    - _job_por_repo: dict[str, str]
+    - _lock: Lock
+    + __init__(fonte: FonteDeDados, tokens: list[str], criar_miner: Callable)
+    + iniciar(repo)
+    + atualizar(repo)
+    + executar_job(job_id)
+    + status(job_id)
+    + status_do_repo(repo)
+    + remover_job(repo)
+    - _exigir_tokens(): None
+    - _exigir_nenhuma_mineracao_global(): None
+    - _registrar(repo: str): JobMineracao
+    - _definir_estado(job_id: str, estado: str, detalhe: str | None): None
+    {static} - _resumo(miner): str
+  }
+}
+
+package "backend.servicos" {
+  class RepositorioServico {
+    - _fonte: FonteDeDados
+    - _gerenciador: GerenciadorMineracao
+    + __init__(fonte: FonteDeDados, gerenciador: GerenciadorMineracao): None
+    + listar(): list[RepositorioResumo]
+    + remover(repo: str): bool
+    + obter(repo: str): RepositorioResumo
+  }
+
+  class grafo_servico <<module>> {
+    + agregar_aresta(grafo, u: int, v: int, peso: float): None
+    + definir_rotulos(grafo, rotulos: list[str]): None
+    + construir_grafo_por_tipo(dados: dict, tipos: set[str], representacao: str): GrafoAbstrato
+  }
+
+  class GrafoServico {
+    - _fonte: FonteDeDados
+    + __init__(fonte: FonteDeDados): None
+    - _dados(repo: str): dict
+    + construir(repo: str, tipo: str, representacao: str): GrafoAbstrato
+    + construir_todos(repo: str, representacao: str): dict[str, GrafoAbstrato]
+    - _resumir(tipo: str, grafo: GrafoAbstrato): GrafoResumo
+    + resumir(repo: str, tipo: str, representacao: str): GrafoResumo
+    + resumir_todos(repo: str, representacao: str): list[GrafoResumo]
+  }
+
+  class analise_servico <<module>> {
+    - _funcao_opcional(modulo, nome: str): Callable | None
+    - _escalar_opcional(modulo, nome: str, grafo, *args): float | None
+    + densidade_opcional(grafo): float | None
+    - _lista_opcional(modulo, nome: str, grafo): list[float] | None
+    - _relatorio_indexado(grafo): dict
+    - _rotulo(grafo, i: int): str
+    - _ranking(grafo, valores: list[float]): list[dict]
+    - _ranking_arestas_por_peso(grafo): list[dict]
+    - _agrupar_comunidades(grafo, particao: list[int]): dict[str, list[str]]
+    - _nomear_pares(grafo, pares: list[tuple[int, int]]): list[tuple[str, str]]
+    - _nomear_graus(grafo, graus: list[dict]): dict[str, dict]
+    - _relatorio_vazio(): dict
+    + relatorio_do_grafo(grafo): dict
+  }
+
+  class AnaliseServico {
+    - _grafos: GrafoServico
+    - _fonte: FonteDeDados
+    - _cache: dict
+    + __init__(grafo_servico: GrafoServico, fonte: FonteDeDados): None
+    + relatorio(repo: str, tipo: str, representacao: str): dict
+    + invalidar(repo: str): None
+  }
+}
+
+package "backend.routers" {
+  class RepositoriosRouter <<router>> {
+    + listar_repositorios(servico): list[RepositorioResumo]
+    + obter_repositorio(owner: str, repo: str, servico): RepositorioResumo
+    + excluir_repositorio(owner: str, repo: str, servico, analise): None
+    + minerar_repositorio(owner: str, repo: str, tarefas, gerenciador): JobMineracao
+    + atualizar_repositorio(owner: str, repo: str, tarefas, gerenciador): JobMineracao
+    + status_mineracao(owner: str, repo: str, job_id: str, gerenciador): JobMineracao
+  }
+
+  class GrafosRouter <<router>> {
+    + resumir_grafos(owner: str, repo: str, representacao: str, servico): list[GrafoResumo]
+    + detalhar_grafo(owner: str, repo: str, tipo: str, representacao: str, servico): GrafoResumo
+    + baixar_gephi(owner: str, repo: str, tipo: str, representacao: str, servico): FileResponse
+  }
+
+  class AnaliseRouter <<router>> {
+    + relatorio_completo(owner: str, repo: str, tipo: str, representacao: str, servico): dict
+    + centralidades(owner: str, repo: str, tipo: str, representacao: str, servico): dict
+    + comunidades(owner: str, repo: str, tipo: str, representacao: str, servico): dict
+    + pontes(owner: str, repo: str, tipo: str, representacao: str, servico): dict
+    + coesao(owner: str, repo: str, tipo: str, representacao: str, servico): dict
+    + ranking(owner: str, repo: str, metrica: str, top: int, tipo: str, representacao: str, servico): list[dict]
+  }
+}
+
+package "analise" {
+  class centralidade <<module>> {
+    + centralidade_grau(grafo): dict[str, list[float]]
+    + centralidade_autovetor(grafo): list[float]
+    + pagerank(grafo, d=0.85): list[float]
+    + centralidade_proximidade(grafo): list[float]
+    + centralidade_intermediacao(grafo): list[float]
+  }
+
+  class coesao <<module>> {
+    + densidade(grafo): float
+    + coeficiente_agrupamento(grafo): float
+    + assortatividade_grau(grafo): float
+  }
+
+  class comunidades <<module>> {
+    - _construir_grafo_subjacente(grafo): dict
+    - _grausPonderados(subjacente): dict
+    + modularidade(grafo, particao): float
+    - _modularidadePeloSubjacente(subjacente, particao): float
+    + louvain(grafo): list[int]
+    - _louvainSubjacente(subjacente): list[int]
+    - _agregar(subjacente, comunidades): tuple[dict, dict]
+  }
+
+  class caminhos <<module>> {
+    + bfs_distancias(grafo, origem): list[float]
+    + dijkstra_distancias(grafo, origem): list[float]
+    + bfs_brandes(grafo, origem): ResultadoBrandes
+  }
+
+  class ResultadoBrandes <<NamedTuple>> {
+    + pilha: list[int]
+    + predecessores: list[list[int]]
+    + sigma: list[float]
+  }
+
+  class pontes <<module>> {
+    + pontes_locais(grafo): list[tuple[int, int]]
+    + arestas_intercomunidade(grafo, particao): list[tuple[int, int]]
+    + pontes_classicas(grafo): list[tuple[int, int]]
+  }
+}
+
+package "gephi" {
+  class gephi <<module>> {
+    + para_gephi(grafo, nome, pasta)
+  }
+}
+
+GrafoAbstrato <|-- GrafoListaAdjacencia
+GrafoAbstrato <|-- GrafoMatrizAdjacencia
+FonteDeDados <|-- FonteCache
+
+Minerador *-- ClienteGithub
+Minerador *-- MapaUsuarios
+Minerador o-- Interacao
+Minerador o-- RequestPendente
+Minerador ..> MinerarOpcoes
+ClienteGithub o-- TokenEstado
+ClienteGithub ..> MinerarOpcoes
+ClienteGithub ..> ResultadoPaginado
+ClienteGithub ..> ErroRequestObrigatoria
+ClienteGithub ..> ErroTokensInutilizaveis
+
+GerenciadorMineracao --> FonteDeDados
+GerenciadorMineracao ..> Minerador : cria e executa
+RepositorioServico --> FonteDeDados
+RepositorioServico --> GerenciadorMineracao
+GrafoServico --> FonteDeDados
+GrafoServico ..> grafo_servico
+grafo_servico ..> GrafoAbstrato
+GrafoServico ..> GrafoAbstrato : constroi
+GrafoServico ..> GrafoListaAdjacencia
+GrafoServico ..> GrafoMatrizAdjacencia
+AnaliseServico --> GrafoServico
+AnaliseServico --> FonteDeDados
+AnaliseServico ..> analise_servico
+analise_servico ..> GrafoAbstrato
+analise_servico ..> centralidade
+analise_servico ..> coesao
+analise_servico ..> comunidades
+analise_servico ..> pontes
+AnaliseServico ..> centralidade
+AnaliseServico ..> coesao
+AnaliseServico ..> comunidades
+AnaliseServico ..> pontes
+comunidades ..> GrafoAbstrato
+centralidade ..> caminhos
+caminhos ..> GrafoAbstrato
+caminhos ..> ResultadoBrandes
+centralidade ..> GrafoAbstrato
+coesao ..> GrafoAbstrato
+pontes ..> GrafoAbstrato
+pontes ..> comunidades
+gephi ..> GrafoAbstrato
+GrafosRouter ..> GrafoServico
+GrafosRouter ..> gephi
+AnaliseRouter ..> AnaliseServico
+RepositoriosRouter ..> RepositorioServico
+RepositoriosRouter ..> GerenciadorMineracao
+
+@enduml

@@ -1,9 +1,7 @@
 """Configuração do backend (pydantic-settings, lê `.env`).
 
-Mantém os segredos (tokens do GitHub) **fora do código** — diferente do
-``scripts/builder.py``, que é um script local descartável. No servidor os tokens
-vêm sempre do ambiente. No MVP (cache-only) os tokens ainda não são usados; ficam
-definidos aqui para a Fase 6 (mineração pela API).
+Mantém os segredos (tokens do GitHub) fora do código: no servidor os tokens vêm
+sempre do ambiente e são repassados ao gerenciador de mineração.
 """
 
 import os
@@ -29,7 +27,6 @@ class Settings(BaseSettings):
     )
 
     # Tokens do GitHub, separados por vírgula (ex.: "ghp_xxx,ghp_yyy").
-    # Não usados no MVP cache-only; reservados para a Fase 6.
     github_tokens: str = ""
 
     # Origens permitidas no CORS, separadas por vírgula (origem do front).

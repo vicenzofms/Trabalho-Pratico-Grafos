@@ -30,3 +30,11 @@ class FonteDeDados(ABC):
         (re-minerar) um repo, a versão muda e o cache invalida sozinho. `None`
         quando o repositório não existe.
         """
+
+    @abstractmethod
+    def remover(self, repo: str) -> bool:
+        """Remove os dados de um repositório da fonte (idempotente).
+
+        Retorna `True` se algo foi removido e `False` se o repositório já não
+        existia — para que um `DELETE` repetido continue respondendo sucesso.
+        """

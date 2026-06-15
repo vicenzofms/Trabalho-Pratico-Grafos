@@ -37,13 +37,6 @@ class MetricaInvalidaError(ErroBackend):
         super().__init__(f"Métrica inválida: '{metrica}'. Válidas: {validas}.")
 
 
-class MineracaoIndisponivelError(ErroBackend):
-    """Mineração desabilitada no MVP (stub) → 501 Not Implemented."""
-
-    def __init__(self, detalhe: str = "mineração indisponível neste modo") -> None:
-        super().__init__(detalhe)
-
-
 class ConflitoMineracaoError(ErroBackend):
     """Pré-condição de mineração violada (Fase 6) → 409 Conflict.
 

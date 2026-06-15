@@ -29,10 +29,11 @@ def relatorio_completo(
     owner: str,
     repo: str,
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> dict:
     """`relatorio_completo()` serializado (índices já convertidos em usernames)."""
-    return servico.relatorio(f"{owner}/{repo}", tipo)
+    return servico.relatorio(f"{owner}/{repo}", tipo, representacao)
 
 
 @router.get("/{owner}/{repo}/analise/centralidades", response_model=CentralidadesResposta)
@@ -40,9 +41,10 @@ def centralidades(
     owner: str,
     repo: str,
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> dict:
-    relatorio = servico.relatorio(f"{owner}/{repo}", tipo)
+    relatorio = servico.relatorio(f"{owner}/{repo}", tipo, representacao)
     return {"centralidades": relatorio["centralidades"]}
 
 
@@ -51,9 +53,10 @@ def comunidades(
     owner: str,
     repo: str,
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> dict:
-    relatorio = servico.relatorio(f"{owner}/{repo}", tipo)
+    relatorio = servico.relatorio(f"{owner}/{repo}", tipo, representacao)
     return {
         "comunidades": relatorio["comunidades"],
         "modularidade": relatorio["modularidade"],
@@ -65,9 +68,10 @@ def pontes(
     owner: str,
     repo: str,
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> dict:
-    return servico.relatorio(f"{owner}/{repo}", tipo)["pontes"]
+    return servico.relatorio(f"{owner}/{repo}", tipo, representacao)["pontes"]
 
 
 @router.get("/{owner}/{repo}/analise/coesao", response_model=CoesaoResposta)
@@ -75,10 +79,11 @@ def coesao(
     owner: str,
     repo: str,
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> dict:
     """Densidade, clustering e assortatividade (parte A; None até existirem)."""
-    relatorio = servico.relatorio(f"{owner}/{repo}", tipo)
+    relatorio = servico.relatorio(f"{owner}/{repo}", tipo, representacao)
     return {
         "densidade": relatorio["densidade"],
         "clustering": relatorio["clustering"],
@@ -93,10 +98,11 @@ def ranking(
     metrica: str,
     top: int = Query(10, ge=1),
     tipo: str = Query("integrado"),
+    representacao: str = Query("matriz"),
     servico: AnaliseServico = Depends(get_analise_servico),
 ) -> list[dict]:
     """Top-N por métrica de centralidade. Métrica inexistente → 404."""
-    centralidades = servico.relatorio(f"{owner}/{repo}", tipo)["centralidades"]
+    centralidades = servico.relatorio(f"{owner}/{repo}", tipo, representacao)["centralidades"]
     if metrica not in centralidades:
         raise MetricaInvalidaError(metrica, sorted(centralidades))
     return centralidades[metrica][:top]

@@ -1,16 +1,15 @@
-"""Rotas de repositórios — leitura (MVP) + mineração (stub 501 no MVP).
-
-As três rotas de mineração já existem aqui com schema definido, mas respondem
-501 via o `GerenciadorMineracao` stub. A Fase 6 só troca o stub pela
-implementação real; estas rotas e os schemas ficam intactos.
-"""
+"""Rotas de repositórios, incluindo leitura, exclusão e mineração assíncrona."""
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from ..dependencias import get_gerenciador_mineracao, get_repositorio_servico
+from ..dependencias import (
+    get_analise_servico,
+    get_gerenciador_mineracao,
+    get_repositorio_servico,
+)
 from ..mineracao import GerenciadorMineracao
 from ..schemas.repositorio import JobMineracao, RepositorioResumo
-from ..servicos import RepositorioServico
+from ..servicos import AnaliseServico, RepositorioServico
 
 router = APIRouter(prefix="/repositorios", tags=["repositorios"])
 
@@ -33,7 +32,20 @@ def obter_repositorio(
     return servico.obter(f"{owner}/{repo}")
 
 
-# --- Mineração (Fase 6) — disparo assíncrono; stub responde 501 no modo leitura --
+@router.delete("/{owner}/{repo}", status_code=204)
+def excluir_repositorio(
+    owner: str,
+    repo: str,
+    servico: RepositorioServico = Depends(get_repositorio_servico),
+    analise: AnaliseServico = Depends(get_analise_servico),
+) -> None:
+    """Exclui o cache do repo (idempotente, 204; 409 se houver mineração ativa)."""
+    nome = f"{owner}/{repo}"
+    servico.remover(nome)  # 409 se estiver minerando
+    analise.invalidar(nome)  # limpa o cache de análise em memória
+
+
+# --- Mineração: disparo assíncrono em background -----------------------------
 @router.post("/{owner}/{repo}/minerar", response_model=JobMineracao, status_code=202)
 def minerar_repositorio(
     owner: str,
@@ -42,7 +54,7 @@ def minerar_repositorio(
     gerenciador: GerenciadorMineracao = Depends(get_gerenciador_mineracao),
 ) -> JobMineracao:
     """Dispara a mineração de um repo **novo** (exige estado AUSENTE → senão 409)."""
-    job = gerenciador.iniciar(f"{owner}/{repo}")  # valida pré-condições (409/503) ou 501 no stub
+    job = gerenciador.iniciar(f"{owner}/{repo}")  # valida pré-condições (409/503)
     tarefas.add_task(gerenciador.executar_job, job.job_id)
     return job
 

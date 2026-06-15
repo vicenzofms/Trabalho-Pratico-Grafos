@@ -1,6 +1,9 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Component, inject, OnInit, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { LucideAngularModule } from 'lucide-angular';
 import { Repositorio } from '../../services/repositorio';
+import { ToastService } from '../../services/toast';
 import { StatusView } from '../../components/status-view/status-view';
 import { Api } from '../../services/api';
 import { TipoGrafo } from '../../models/api.models';
@@ -8,16 +11,18 @@ import { TipoGrafo } from '../../models/api.models';
 @Component({
   selector: 'app-visao-geral',
   standalone: true,
-  imports: [StatusView],
+  imports: [StatusView, RouterLink, LucideAngularModule],
   templateUrl: './visao-geral.html',
 })
 export class VisaoGeral implements OnInit {
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
   private api = inject(Api);
+  private toast = inject(ToastService);
   repositorio = inject(Repositorio);
 
   grafos = this.repositorio.grafos;
+
+  baixando = signal<Set<TipoGrafo>>(new Set());
 
   ngOnInit() {
     const { owner, repo } = this.route.snapshot.params;
@@ -37,10 +42,39 @@ export class VisaoGeral implements OnInit {
     this.grafos.reload();
   }
 
-  urlGephi(tipo: TipoGrafo) {
+  linkMetricas(tipo: TipoGrafo): any[] {
     const sel = this.repositorio.selecionado();
-    if (!sel) return '#';
-    return this.api.urlGephi(sel.owner, sel.repo, tipo);
+    if (!sel) return ['/'];
+    return ['/', sel.owner, sel.repo, 'metricas', tipo];
+  }
+
+  estaBaixando(tipo: TipoGrafo) {
+    return this.baixando().has(tipo);
+  }
+
+  async baixarGephi(tipo: TipoGrafo) {
+    const sel = this.repositorio.selecionado();
+    if (!sel || this.baixando().has(tipo)) return;
+    this.baixando.update(s => new Set(s).add(tipo));
+    try {
+      const blob = await firstValueFrom(
+        this.api.baixarGephi(sel.owner, sel.repo, tipo, this.repositorio.representacao())
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sel.owner}_${sel.repo}_${tipo}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      this.toast.erro(`Falha ao exportar GEPHI (${this.tipoLabel(tipo)}).`);
+    } finally {
+      this.baixando.update(s => {
+        const n = new Set(s);
+        n.delete(tipo);
+        return n;
+      });
+    }
   }
 
   chipCorClasse(tipo: TipoGrafo) {

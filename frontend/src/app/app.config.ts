@@ -2,13 +2,13 @@ import { ApplicationConfig, importProvidersFrom, provideBrowserGlobalErrorListen
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { routes } from './app.routes';
-import { LucideAngularModule, Sun, Moon, Download, RefreshCw, AlertCircle } from 'lucide-angular';
+import { LucideAngularModule, Sun, Moon, Download, RefreshCw, AlertCircle, Info, X, Loader2, ArrowUp, Trash2 } from 'lucide-angular';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(withFetch()),
-    importProvidersFrom(LucideAngularModule.pick({ Sun, Moon, Download, RefreshCw, AlertCircle })),
+    importProvidersFrom(LucideAngularModule.pick({ Sun, Moon, Download, RefreshCw, AlertCircle, Info, X, Loader2, ArrowUp, Trash2 })),
   ],
 };

@@ -16,13 +16,6 @@
         >
           Visão Geral
         </a>
-        <a
-          [routerLink]="['/' + sel.owner + '/' + sel.repo + '/metricas']"
-          routerLinkActive="bg-primary text-on-primary"
-          class="px-3 py-1.5 text-sm font-semibold nb-border nb-shadow-sm rounded-[6px] nb-interactive nb-themed text-foreground no-underline"
-        >
-          Métricas
-        </a>
       </nav>
     }
 
@@ -35,3 +28,6 @@
 <main class="max-w-6xl mx-auto px-4 py-8">
   <router-outlet />
 </main>
+
+<app-toast />
+<app-confetti />
